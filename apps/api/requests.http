@@ -1,0 +1,46 @@
+@host = http://localhost:3000
+
+### ヘルスチェック
+GET {{host}}/
+
+### お問い合わせ（正常系）→ 200 { ok: true, data }
+POST {{host}}/contact
+Content-Type: application/json
+
+{
+  "name": "佐藤",
+  "email": "s@example.com",
+  "title": "件名",
+  "message": "本文"
+}
+
+### お問い合わせ（異常系: 全項目不正）→ 400 { errors }
+POST {{host}}/contact
+Content-Type: application/json
+
+{
+  "name": "",
+  "email": "bad",
+  "title": "",
+  "message": ""
+}
+
+### お問い合わせ（異常系: email のみ不正）→ 400 errors.fieldErrors.email
+POST {{host}}/contact
+Content-Type: application/json
+
+{
+  "name": "佐藤",
+  "email": "not-an-email",
+  "title": "件名",
+  "message": "本文"
+}
+
+### お問い合わせ（異常系: 必須項目欠落）→ 400
+POST {{host}}/contact
+Content-Type: application/json
+
+{
+  "name": "佐藤",
+  "email": "s@example.com"
+}
