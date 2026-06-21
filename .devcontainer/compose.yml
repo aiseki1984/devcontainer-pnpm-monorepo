@@ -1,0 +1,41 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - pnpm_store:/home/vscode/.local/share/pnpm/store
+    command: sleep infinity
+    # アプリ用の環境変数(DATABASE_URL, JWT_SECRET など)はここには置かない。
+    # root の npm scripts が dotenv-cli で .env を読み込む。compose には
+    # コンテナ自体に必要なインフラ系の変数だけを置く。
+    environment:
+      NODE_ENV: development
+      npm_config_store_dir: /home/vscode/.local/share/pnpm/store
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: todo_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d todo_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # mailpit: メールダミー（後で追加）
+  # redis: BullMQ用（後で追加）
+
+volumes:
+  postgres_data:
+  pnpm_store:

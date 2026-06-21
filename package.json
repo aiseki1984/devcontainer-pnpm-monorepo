@@ -1,0 +1,35 @@
+{
+  "name": "pnpm-test-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "dotenv -- turbo dev",
+    "build": "dotenv -- turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo typecheck",
+    "test": "dotenv -- turbo test",
+    "db:migrate": "dotenv -- pnpm --filter @todo-auth/db db:migrate",
+    "db:seed": "dotenv -- pnpm --filter @todo-auth/db db:seed",
+    "db:studio": "dotenv -- pnpm --filter @todo-auth/db db:studio",
+    "db:reset": "dotenv -- bash scripts/db-reset.sh",
+    "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx,json,md,yml,yaml,css}": "prettier --write"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.4",
+    "turbo": "^2.9.18",
+    "typescript": "^6.0.3"
+  }
+}

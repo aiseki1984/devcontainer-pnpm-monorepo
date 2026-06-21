@@ -1,0 +1,69 @@
+{
+  "name": "Dev Environment",
+  "dockerComposeFile": "compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  // ツールは Features で後付け
+  "features": {
+    // Node は .nvmrc、pnpm は package.json の packageManager と一致させる（明示ピン）。
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24.16.0",
+      "pnpmVersion": "11.5.3"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+
+  // CLI ツールの認証情報や設定をコンテナ再構築後も保持
+  "mounts": [
+    "source=claude-code-config,target=/home/vscode/.claude,type=volume",
+    "source=codex-config,target=/home/vscode/.codex,type=volume"
+  ],
+
+  "forwardPorts": [3000, 3001, 8787, 5432, 4983],
+  "portsAttributes": {
+    "3000": { "label": "Next.js Web", "onAutoForward": "notify" },
+    "3001": { "label": "Next.js Admin", "onAutoForward": "notify" },
+    "8787": { "label": "Hono API", "onAutoForward": "notify" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
+    "4983": { "label": "Drizzle Studio", "onAutoForward": "notify" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "anthropic.claude-code",
+        "openai.chatgpt",
+        "google.geminicodeassist",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "humao.rest-client"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        // SQLTools: postgres への接続設定
+        "sqltools.connections": [
+          {
+            "name": "todo_dev",
+            "driver": "PostgreSQL",
+            "host": "postgres",
+            "port": 5432,
+            "database": "todo_dev",
+            "username": "dev",
+            "password": "dev"
+          }
+        ]
+      }
+    }
+  },
+
+  // package.json があれば依存関係と Playwright の Chromium を自動セットアップ。
+  // .env は自動生成しない。必要に応じて cp .env.example .env で明示的に作成する。
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.codex /home/vscode/.local/share/pnpm && { if [ ! -f .env ]; then echo '[postCreate] .env is missing. Run: cp .env.example .env'; fi; if [ -f package.json ]; then pnpm config set store-dir /home/vscode/.local/share/pnpm/store --location=user && pnpm install && if pnpm exec playwright --version >/dev/null 2>&1; then pnpm exec playwright install chromium; fi; fi; }"
+}
