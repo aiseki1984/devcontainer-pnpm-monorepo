@@ -4,7 +4,7 @@
     "DATABASE_URL",
     "JWT_SECRET",
     "WEB_ORIGIN",
-    "PORT",
+    "API_PORT",
     "NODE_ENV"
   ],
   "tasks": {

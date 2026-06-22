@@ -32,6 +32,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.5
         version: 2.0.5(hono@4.12.26)
+      '@pnpm-test-workspace/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@pnpm-test-workspace/db':
         specifier: workspace:*
         version: link:../../packages/db
