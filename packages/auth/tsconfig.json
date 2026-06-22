@@ -1,0 +1,9 @@
+{
+  "extends": "@pnpm-test-workspace/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}
