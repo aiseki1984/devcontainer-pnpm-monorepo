@@ -1,0 +1,11 @@
+# build
+dist/
+
+# deps
+node_modules/
+
+# turbo
+.turbo/
+
+# logs
+*.log

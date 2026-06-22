@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.5",
+    "@pnpm-test-workspace/db": "workspace:*",
     "@pnpm-test-workspace/validators": "workspace:*",
     "hono": "^4.12.26"
   },
