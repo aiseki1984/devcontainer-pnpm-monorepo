@@ -14,6 +14,12 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   return user ?? null;
 }
 
+/** id でユーザーを引く。存在しなければ null（リフレッシュ時の再取得などで使う）。 */
+export async function getUserById(id: number): Promise<User | null> {
+  const [user] = await db.select().from(users).where(eq(users.id, id));
+  return user ?? null;
+}
+
 /** ユーザーを作成し、作成された行を返す。 */
 export async function createUser(input: NewUser): Promise<User> {
   const [created] = await db.insert(users).values(input).returning();
