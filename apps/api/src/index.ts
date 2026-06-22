@@ -11,7 +11,15 @@ app.get("/", (c) => {
 
 // 共有スキーマで受信ボディを検証し、DB に保存する。
 app.post("/contact", async (c) => {
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      { errors: { formErrors: ["invalid JSON"], fieldErrors: {} } },
+      400,
+    );
+  }
   const result = contactSchema.safeParse(body);
   if (!result.success) {
     return c.json({ errors: result.error.flatten() }, 400);
