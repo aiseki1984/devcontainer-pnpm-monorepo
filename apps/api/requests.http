@@ -3,7 +3,7 @@
 ### ヘルスチェック
 GET {{host}}/
 
-### お問い合わせ（正常系）→ 200 { ok: true, data }
+### お問い合わせ（正常系）→ 201 { ok: true, data }（DB に保存される）
 POST {{host}}/contact
 Content-Type: application/json
 
@@ -13,6 +13,9 @@ Content-Type: application/json
   "title": "件名",
   "message": "本文"
 }
+
+### お問い合わせ一覧（新しい順）→ 200 { ok: true, data: [...] }
+GET {{host}}/contacts
 
 ### お問い合わせ（異常系: 全項目不正）→ 400 { errors }
 POST {{host}}/contact
