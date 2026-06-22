@@ -1,7 +1,67 @@
-@host = http://localhost:3000
+@host = http://localhost:8787
 
 ### ヘルスチェック
 GET {{host}}/
+
+### --- 一般ユーザー認証 ---
+### REST Client は Cookie を自動で保持・送信するので、上から順に実行すれば動く。
+
+### 登録 → 201。Set-Cookie で access_token(Path=/) と refresh_token(Path=/auth) が返る
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "山田太郎",
+  "email": "taro@example.com",
+  "password": "supersecret"
+}
+
+### 自分の情報 → 200（access Cookie を検証）
+GET {{host}}/me
+
+### リフレッシュ → 200。古い refresh を失効し、新しい access + refresh を再発行（ローテーション）
+POST {{host}}/auth/refresh
+
+### ログアウト → 200。refresh を DB で失効し、両 Cookie を削除
+POST {{host}}/auth/logout
+
+### ログイン（正常系）→ 200
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "taro@example.com",
+  "password": "supersecret"
+}
+
+### ログイン（誤パスワード）→ 401（email の存在は漏らさない）
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "taro@example.com",
+  "password": "wrong"
+}
+
+### 登録（重複 email）→ 409
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "別人",
+  "email": "taro@example.com",
+  "password": "anotherpass"
+}
+
+### 登録（バリデーション不正）→ 400 { errors: fieldErrors }
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "",
+  "email": "bad",
+  "password": "short"
+}
 
 ### お問い合わせ（正常系）→ 201 { ok: true, data }（DB に保存される）
 POST {{host}}/contact

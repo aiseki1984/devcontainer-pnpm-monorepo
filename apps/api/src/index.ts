@@ -1,13 +1,22 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { contactSchema } from "@pnpm-test-workspace/validators";
 import { createContact, listContacts } from "@pnpm-test-workspace/db";
+import { userAuthRoutes } from "./auth/user-routes.js";
 
 const app = new Hono();
+
+// Cookie 併用のクロスオリジンでは Allow-Origin に "*" を使えないので許可リストで明示する。
+const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+app.use("/*", cors({ origin: [webOrigin], credentials: true }));
 
 app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
+
+// 一般ユーザーの認証（/auth/register, /auth/login, /auth/logout, /auth/refresh, /me）。
+app.route("/", userAuthRoutes);
 
 // 共有スキーマで受信ボディを検証し、DB に保存する。
 app.post("/contact", async (c) => {
@@ -38,7 +47,7 @@ app.get("/contacts", async (c) => {
 serve(
   {
     fetch: app.fetch,
-    port: 3000,
+    port: Number(process.env.PORT ?? 8787),
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
