@@ -16,18 +16,17 @@ import {
   hashPassword,
   hashRefreshToken,
   signAccessToken,
-  verifyAccessToken,
   verifyPassword,
 } from "@pnpm-test-workspace/auth";
 import type { Context } from "hono";
 import {
-  ACCESS_COOKIE,
   clearAuthCookies,
   REFRESH_COOKIE,
   REFRESH_MAX_AGE_MS,
   setAccessCookie,
   setRefreshCookie,
 } from "./cookies.js";
+import { requireAuth } from "./middleware.js";
 
 /** 一般ユーザー向け認証ルート（/auth/* と /me）。 */
 export const userAuthRoutes = new Hono();
@@ -151,22 +150,11 @@ userAuthRoutes.post("/auth/refresh", async (c) => {
   return c.json({ ok: true, user: publicUser(user) });
 });
 
-userAuthRoutes.get("/me", async (c) => {
-  const token = getCookie(c, ACCESS_COOKIE);
-  if (!token) {
-    return c.json({ ok: false, error: "not authenticated" }, 401);
-  }
-  try {
-    const payload = await verifyAccessToken(token);
-    return c.json({
-      ok: true,
-      user: {
-        id: Number(payload.sub),
-        email: payload.email,
-        role: payload.role,
-      },
-    });
-  } catch {
-    return c.json({ ok: false, error: "invalid token" }, 401);
-  }
+// 保護ルート: requireAuth が access Cookie を検証し c.get("user") に payload を載せる。
+userAuthRoutes.get("/me", requireAuth, (c) => {
+  const user = c.get("user");
+  return c.json({
+    ok: true,
+    user: { id: Number(user.sub), email: user.email, role: user.role },
+  });
 });
