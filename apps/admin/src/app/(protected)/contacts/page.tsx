@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { adminApiGet } from "../../../lib/server-api";
 import { Pagination } from "../../../components/pagination";
 
@@ -33,15 +32,10 @@ export default async function ContactsPage({
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
 
+  // 認証は proxy（期限切れ→refresh）と adminApiGet（401→/login）が担うので、ここは認証を気にしない。
   const res = await adminApiGet(
     `/admin/contacts?page=${page}&perPage=${PER_PAGE}`,
   );
-  // JWT 切れ（access Cookie はあるが中身が期限切れ）→ 更新の単一経路へ。戻り先に現在ページを渡す。
-  if (res.status === 401) {
-    redirect(
-      `/admin/auth/refresh?next=${encodeURIComponent(`/contacts?page=${page}`)}`,
-    );
-  }
   if (!res.ok) {
     return (
       <section className="flex flex-col gap-4">

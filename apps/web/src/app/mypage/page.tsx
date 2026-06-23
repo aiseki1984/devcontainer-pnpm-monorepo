@@ -4,9 +4,8 @@ import { userApiGet } from "../../lib/server-api";
 type Me = { user: { id: number; email: string; role: string } };
 
 export default async function MyPage() {
+  // 認証は proxy（期限切れ→refresh）と userApiGet（401→/login）が担う。
   const res = await userApiGet("/me");
-  // JWT 切れ（access Cookie はあるが中身が期限切れ）→ 更新の単一経路へ。
-  if (res.status === 401) redirect("/auth/refresh?next=/mypage");
   if (!res.ok) redirect("/login");
 
   const { user } = (await res.json()) as Me;
