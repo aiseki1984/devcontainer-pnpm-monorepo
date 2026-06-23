@@ -6,11 +6,18 @@ import Link from "next/link";
 import { API_URL } from "../../lib/api";
 import { useAuth } from "../../components/auth-provider";
 
+// 開発用にデフォルトのユーザーアカウントを用意しています。
+// 本番環境ではこのアカウントは使用しないでください。
+const DEFAULT_USER = {
+  email: "taro@example.com",
+  password: "supersecret",
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const { reload } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(DEFAULT_USER.email);
+  const [password, setPassword] = useState(DEFAULT_USER.password);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 

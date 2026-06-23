@@ -7,13 +7,20 @@
  */
 import { hashPassword } from "@pnpm-test-workspace/auth";
 import { db } from "./client.js";
-import { admins, contacts } from "./schema.js";
+import { admins, contacts, users } from "./schema.js";
 
 /** 開発用の管理者。自己登録は無いので seed で投入する。 */
 const sampleAdmin = {
   name: "管理者",
   email: "admin@example.com",
   password: "adminpass",
+};
+
+/** 開発用の一般ユーザー。register でも作れるが、初期確認用に seed で投入しておく。 */
+const sampleUser = {
+  name: "山田太郎",
+  email: "taro@example.com",
+  password: "supersecret",
 };
 
 const sampleContacts: (typeof contacts.$inferInsert)[] = [
@@ -57,6 +64,20 @@ async function seed() {
   });
   console.log(
     `[seed] admin: ${sampleAdmin.email} / ${sampleAdmin.password} (dev only)`,
+  );
+
+  console.log("[seed] clearing users ...");
+  await db.delete(users); // user_refresh_tokens は FK cascade で消える
+
+  console.log("[seed] inserting user ...");
+  const userPasswordHash = await hashPassword(sampleUser.password);
+  await db.insert(users).values({
+    name: sampleUser.name,
+    email: sampleUser.email,
+    passwordHash: userPasswordHash,
+  });
+  console.log(
+    `[seed] user: ${sampleUser.email} / ${sampleUser.password} (dev only)`,
   );
   console.log("[seed] done.");
 }
