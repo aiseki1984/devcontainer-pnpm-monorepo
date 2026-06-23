@@ -32,7 +32,7 @@ export const adminAuthRoutes = new Hono();
 
 /** password_hash を落とした、外部に返してよい管理者表現。 */
 function publicAdmin(admin: Admin) {
-  return { id: admin.id, email: admin.email, name: admin.name };
+  return { id: admin.id, email: admin.email, name: admin.name, role: "admin" };
 }
 
 /** admin の access JWT（role:"admin"）を発行し、refresh を保存して両 Cookie に載せる。 */
@@ -125,10 +125,11 @@ adminAuthRoutes.post("/admin/auth/refresh", async (c) => {
   return c.json({ ok: true, admin: publicAdmin(admin) });
 });
 
-adminAuthRoutes.get("/admin/me", requireAdmin, (c) => {
-  const admin = c.get("user");
-  return c.json({
-    ok: true,
-    admin: { id: Number(admin.sub), email: admin.email, role: admin.role },
-  });
+adminAuthRoutes.get("/admin/me", requireAdmin, async (c) => {
+  const payload = c.get("user");
+  const admin = await getAdminById(Number(payload.sub));
+  if (!admin) {
+    return c.json({ ok: false, error: "admin not found" }, 401);
+  }
+  return c.json({ ok: true, admin: publicAdmin(admin) });
 });

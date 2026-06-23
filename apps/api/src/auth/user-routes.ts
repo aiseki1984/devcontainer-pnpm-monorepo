@@ -34,7 +34,7 @@ export const userAuthRoutes = new Hono();
 
 /** password_hash を落とした、外部に返してよいユーザー表現。 */
 function publicUser(user: User) {
-  return { id: user.id, email: user.email, name: user.name };
+  return { id: user.id, email: user.email, name: user.name, role: "user" };
 }
 
 /** access JWT を発行し、refresh を生成・DB 保存し、両方を Cookie に載せる。 */
@@ -157,11 +157,12 @@ userAuthRoutes.post("/auth/refresh", async (c) => {
   return c.json({ ok: true, user: publicUser(user) });
 });
 
-// 保護ルート: requireAuth が access Cookie を検証し c.get("user") に payload を載せる。
-userAuthRoutes.get("/me", requireAuth, (c) => {
-  const user = c.get("user");
-  return c.json({
-    ok: true,
-    user: { id: Number(user.sub), email: user.email, role: user.role },
-  });
+// 保護ルート: requireAuth が access Cookie を検証し、DB の現在値で公開表現を返す。
+userAuthRoutes.get("/me", requireAuth, async (c) => {
+  const payload = c.get("user");
+  const user = await getUserById(Number(payload.sub));
+  if (!user) {
+    return c.json({ ok: false, error: "user not found" }, 401);
+  }
+  return c.json({ ok: true, user: publicUser(user) });
 });

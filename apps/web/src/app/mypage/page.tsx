@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { userApiGet } from "../../lib/server-api";
 
-type Me = { user: { id: number; email: string; role: string } };
+type Me = { user: { id: number; email: string; name: string; role: string } };
 
 export default async function MyPage() {
   // 認証は proxy（期限切れ→refresh）と userApiGet（401→/login）が担う。
@@ -22,6 +22,10 @@ export default async function MyPage() {
           <div className="flex justify-between">
             <dt className="text-zinc-500">email</dt>
             <dd>{user.email}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-zinc-500">name</dt>
+            <dd>{user.name}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-zinc-500">role</dt>
