@@ -4,19 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
+import { toErrorMessage, type ErrorBody } from "../../lib/error-message";
 import { useAuth } from "../../components/auth-provider";
-
-type ErrorBody = {
-  error?: string;
-  errors?: Record<string, string[]>;
-};
-
-/** api の 400(fieldErrors) / 409(error) を 1 つのメッセージに整える。 */
-function toMessage(data: ErrorBody | null): string {
-  if (data?.error) return data.error;
-  const first = data?.errors && Object.values(data.errors)[0]?.[0];
-  return first ?? "登録に失敗しました";
-}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -39,7 +28,12 @@ export default function RegisterPage() {
         body: JSON.stringify({ name, email, password }),
       });
       if (!res.ok) {
-        setError(toMessage((await res.json().catch(() => null)) as ErrorBody));
+        setError(
+          toErrorMessage(
+            (await res.json().catch(() => null)) as ErrorBody | null,
+            "登録に失敗しました",
+          ),
+        );
         return;
       }
       // 登録成功時はそのままログイン済み（Cookie 発行済み）。状態を取り直して保護ページへ。

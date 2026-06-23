@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
+import { toErrorMessage, type ErrorBody } from "../../lib/error-message";
 import { useAuth } from "../../components/auth-provider";
 
 // 開発用にデフォルトの管理者アカウントを用意しています。
@@ -32,10 +33,12 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setError(data?.error ?? "ログインに失敗しました");
+        setError(
+          toErrorMessage(
+            (await res.json().catch(() => null)) as ErrorBody | null,
+            "ログインに失敗しました",
+          ),
+        );
         return;
       }
       await reload();

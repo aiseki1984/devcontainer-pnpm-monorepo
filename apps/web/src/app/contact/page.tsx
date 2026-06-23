@@ -2,14 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { API_URL } from "../../lib/api";
-
-type ErrorBody = { error?: string; errors?: Record<string, string[]> };
-
-function toMessage(data: ErrorBody | null): string {
-  if (data?.error) return data.error;
-  const first = data?.errors && Object.values(data.errors)[0]?.[0];
-  return first ?? "送信に失敗しました";
-}
+import { toErrorMessage, type ErrorBody } from "../../lib/error-message";
 
 export default function ContactPage() {
   const [form, setForm] = useState({
@@ -38,7 +31,12 @@ export default function ContactPage() {
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        setError(toMessage((await res.json().catch(() => null)) as ErrorBody));
+        setError(
+          toErrorMessage(
+            (await res.json().catch(() => null)) as ErrorBody | null,
+            "送信に失敗しました",
+          ),
+        );
         return;
       }
       setDone(true);
