@@ -11,6 +11,7 @@ import {
   type Admin,
 } from "@pnpm-test-workspace/db";
 import {
+  DUMMY_PASSWORD_HASH,
   generateRefreshToken,
   hashRefreshToken,
   signAccessToken,
@@ -66,11 +67,12 @@ adminAuthRoutes.post("/admin/auth/login", async (c) => {
     );
   }
   const admin = await getAdminByEmail(parsed.data.email);
-  // 不在でも「不一致」と同じ応答にして email の存在有無を漏らさない。
-  if (
-    !admin ||
-    !(await verifyPassword(admin.passwordHash, parsed.data.password))
-  ) {
+  // 不在でもダミーハッシュを検証し、email の存在有無を応答時間で漏らしにくくする。
+  const passwordMatches = await verifyPassword(
+    admin?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    parsed.data.password,
+  );
+  if (!admin || !passwordMatches) {
     return c.json({ ok: false, error: "invalid email or password" }, 401);
   }
   await issueAdminSession(c, admin);
