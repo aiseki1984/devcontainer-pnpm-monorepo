@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { adminApiGet } from "../../../lib/server-api";
 
-type Me = { admin: { id: number; email: string; role: string } };
+type Me = { admin: { id: number; email: string; name: string; role: string } };
 
 export default async function DashboardPage() {
   // 認証は proxy（期限切れ→refresh）と adminApiGet（401→/login）が担う。
@@ -23,6 +23,10 @@ export default async function DashboardPage() {
         <div className="flex justify-between gap-8">
           <dt className="text-zinc-500">email</dt>
           <dd>{admin.email}</dd>
+        </div>
+        <div className="flex justify-between gap-8">
+          <dt className="text-zinc-500">name</dt>
+          <dd>{admin.name}</dd>
         </div>
         <div className="flex justify-between gap-8">
           <dt className="text-zinc-500">role</dt>

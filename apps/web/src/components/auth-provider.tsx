@@ -10,7 +10,7 @@ import {
 } from "react";
 import { API_URL } from "../lib/api";
 
-export type Me = { id: number; email: string; role: string };
+export type Me = { id: number; email: string; name: string; role: string };
 
 type AuthContextValue = {
   me: Me | null;
