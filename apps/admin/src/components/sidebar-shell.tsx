@@ -5,7 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "./auth-provider";
 
-const navItems = [{ href: "/dashboard", label: "ダッシュボード" }];
+const navItems = [
+  { href: "/dashboard", label: "ダッシュボード" },
+  { href: "/contacts", label: "お問い合わせ" },
+];
 
 /**
  * 保護ページ共通のシェル（サイドバー + トップバー）。
@@ -56,9 +59,6 @@ export function SidebarShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <span className="cursor-default rounded-md px-3 py-2 text-zinc-400 dark:text-zinc-600">
-            お問い合わせ（準備中）
-          </span>
         </nav>
       </aside>
 

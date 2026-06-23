@@ -5,6 +5,7 @@ import { contactSchema } from "@pnpm-test-workspace/validators";
 import { createContact, listContacts } from "@pnpm-test-workspace/db";
 import { userAuthRoutes } from "./auth/user-routes.js";
 import { adminAuthRoutes } from "./auth/admin-routes.js";
+import { requireAdmin } from "./auth/middleware.js";
 
 const app = new Hono();
 
@@ -43,8 +44,8 @@ app.post("/contact", async (c) => {
   return c.json({ ok: true, data: created }, 201);
 });
 
-// 保存済みのお問い合わせ一覧を新しい順で返す。
-app.get("/contacts", async (c) => {
+// 管理者だけが、保存済みのお問い合わせ一覧を新しい順で取得できる。
+app.get("/admin/contacts", requireAdmin, async (c) => {
   const rows = await listContacts();
   return c.json({ ok: true, data: rows });
 });
