@@ -1,25 +1,15 @@
-"use client";
+import { redirect } from "next/navigation";
+import { userApiGet } from "../../lib/server-api";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "../../components/auth-provider";
+type Me = { user: { id: number; email: string; role: string } };
 
-export default function MyPage() {
-  const router = useRouter();
-  const { me, loading } = useAuth();
+export default async function MyPage() {
+  const res = await userApiGet("/me");
+  // JWT 切れ（access Cookie はあるが中身が期限切れ）→ 更新の単一経路へ。
+  if (res.status === 401) redirect("/auth/refresh?next=/mypage");
+  if (!res.ok) redirect("/login");
 
-  // proxy は access Cookie の有無で弾くが、無効トークン等で me が取れない場合は /login へ。
-  useEffect(() => {
-    if (!loading && !me) router.replace("/login");
-  }, [loading, me, router]);
-
-  if (loading || !me) {
-    return (
-      <main className="flex flex-1 items-center justify-center text-zinc-500">
-        読み込み中…
-      </main>
-    );
-  }
+  const { user } = (await res.json()) as Me;
 
   return (
     <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
@@ -28,15 +18,15 @@ export default function MyPage() {
         <dl className="flex flex-col gap-2 text-sm">
           <div className="flex justify-between">
             <dt className="text-zinc-500">id</dt>
-            <dd>{me.id}</dd>
+            <dd>{user.id}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-zinc-500">email</dt>
-            <dd>{me.email}</dd>
+            <dd>{user.email}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-zinc-500">role</dt>
-            <dd>{me.role}</dd>
+            <dd>{user.role}</dd>
           </div>
         </dl>
         <p className="text-sm text-zinc-500">

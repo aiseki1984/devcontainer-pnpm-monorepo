@@ -12,7 +12,8 @@ const navItems = [
 
 /**
  * 保護ページ共通のシェル（サイドバー + トップバー）。
- * admin が取れなければ /login へ。サイドバーは保護ルートだけに出る（/login には付かない）。
+ * 本体は SSR でサーバ側が認証を確認して描画するので、ここはシェル（chrome）を即時描画する。
+ * 念のためクライアントでも admin が取れなければ /login へ（保険のソフトゲート）。
  */
 export function SidebarShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -26,14 +27,6 @@ export function SidebarShell({ children }: { children: ReactNode }) {
   async function onLogout() {
     await logout();
     router.push("/login");
-  }
-
-  if (loading || !admin) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-zinc-500">
-        読み込み中…
-      </div>
-    );
   }
 
   return (
@@ -64,7 +57,7 @@ export function SidebarShell({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-end gap-3 border-b border-black/[.08] px-6 text-sm dark:border-white/[.145]">
-          <span className="text-zinc-500">{admin.email}</span>
+          <span className="text-zinc-500">{admin?.email ?? ""}</span>
           <button
             onClick={onLogout}
             className="rounded-full border border-black/[.12] px-3 py-1 transition-colors hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.06]"

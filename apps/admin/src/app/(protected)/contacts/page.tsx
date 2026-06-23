@@ -1,7 +1,6 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { adminFetch } from "../../../lib/api";
+import { redirect } from "next/navigation";
+import { adminApiGet } from "../../../lib/server-api";
+import { Pagination } from "../../../components/pagination";
 
 /** API（GET /admin/contacts）が返すお問い合わせ1件分の形。db の Contact に対応。 */
 type Contact = {
@@ -13,60 +12,85 @@ type Contact = {
   createdAt: string;
 };
 
-export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[] | null>(null);
-  const [error, setError] = useState(false);
+type ContactsResponse = {
+  data: Contact[];
+  pagination: {
+    page: number;
+    perPage: number;
+    total: number;
+    totalPages: number;
+  };
+};
 
-  useEffect(() => {
-    let active = true;
-    adminFetch("/admin/contacts")
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        return (await res.json()).data as Contact[];
-      })
-      .then((rows) => {
-        if (active) setContacts(rows);
-      })
-      .catch(() => {
-        if (active) setError(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+const PER_PAGE = 20;
 
-  return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">お問い合わせ</h1>
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
 
-      {error ? (
+  const res = await adminApiGet(
+    `/admin/contacts?page=${page}&perPage=${PER_PAGE}`,
+  );
+  // JWT 切れ（access Cookie はあるが中身が期限切れ）→ 更新の単一経路へ。戻り先に現在ページを渡す。
+  if (res.status === 401) {
+    redirect(
+      `/admin/auth/refresh?next=${encodeURIComponent(`/contacts?page=${page}`)}`,
+    );
+  }
+  if (!res.ok) {
+    return (
+      <section className="flex flex-col gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight">お問い合わせ</h1>
         <p className="text-sm text-red-600 dark:text-red-400">
           お問い合わせの取得に失敗しました。
         </p>
-      ) : contacts === null ? (
-        <p className="text-sm text-zinc-500">読み込み中…</p>
-      ) : contacts.length === 0 ? (
+      </section>
+    );
+  }
+
+  const { data, pagination } = (await res.json()) as ContactsResponse;
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight">お問い合わせ</h1>
+        <span className="text-sm text-zinc-500">全 {pagination.total} 件</span>
+      </div>
+
+      {data.length === 0 ? (
         <p className="text-sm text-zinc-500">お問い合わせはまだありません。</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {contacts.map((contact) => (
-            <li
-              key={contact.id}
-              className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-950"
-            >
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="font-medium">{contact.title}</h2>
-                <time className="shrink-0 text-xs text-zinc-500">
-                  {new Date(contact.createdAt).toLocaleString("ja-JP")}
-                </time>
-              </div>
-              <p className="text-sm text-zinc-500">
-                {contact.name}（{contact.email}）
-              </p>
-              <p className="whitespace-pre-wrap text-sm">{contact.message}</p>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-3">
+            {data.map((contact) => (
+              <li
+                key={contact.id}
+                className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-950"
+              >
+                <div className="flex items-baseline justify-between gap-4">
+                  <h2 className="font-medium">{contact.title}</h2>
+                  <time className="shrink-0 text-xs text-zinc-500">
+                    {new Date(contact.createdAt).toLocaleString("ja-JP")}
+                  </time>
+                </div>
+                <p className="text-sm text-zinc-500">
+                  {contact.name}（{contact.email}）
+                </p>
+                <p className="whitespace-pre-wrap text-sm">{contact.message}</p>
+              </li>
+            ))}
+          </ul>
+
+          <Pagination
+            basePath="/contacts"
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+          />
+        </>
       )}
     </section>
   );

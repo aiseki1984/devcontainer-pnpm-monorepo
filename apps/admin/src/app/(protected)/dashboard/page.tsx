@@ -1,11 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
+import { adminApiGet } from "../../../lib/server-api";
 
-import { useAuth } from "../../../components/auth-provider";
+type Me = { admin: { id: number; email: string; role: string } };
 
-export default function DashboardPage() {
-  // SidebarShell が admin の存在を保証してから描画する。
-  const { admin } = useAuth();
-  if (!admin) return null;
+export default async function DashboardPage() {
+  const res = await adminApiGet("/admin/me");
+  if (res.status === 401) redirect("/admin/auth/refresh?next=/dashboard");
+  if (!res.ok) redirect("/login");
+
+  const { admin } = (await res.json()) as Me;
 
   return (
     <section className="flex max-w-sm flex-col gap-4 rounded-2xl border border-black/[.08] bg-white p-8 dark:border-white/[.145] dark:bg-zinc-950">
