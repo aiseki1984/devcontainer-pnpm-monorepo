@@ -21,7 +21,7 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
       return c.json({ ok: false, error: "not authenticated" }, 401);
     }
     try {
-      c.set("user", await verifyAccessToken(token));
+      c.set("user", await verifyAccessToken(token, { audience: "user" }));
     } catch {
       return c.json({ ok: false, error: "invalid token" }, 401);
     }
@@ -31,8 +31,8 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
 
 /**
  * 管理者用の保護ミドルウェア。admin の access Cookie を検証し、
- * role === "admin" を必須とする。単一 JWT_SECRET なので user トークンでも署名検証は
- * 通るが、role チェックで弾く（取り違え防止のため Cookie 名も別）。
+ * audience === "admin" と role === "admin" を必須とする。単一 JWT_SECRET でも
+ * user/admin トークンの用途を JWT 検証時点で分離する。
  */
 export const requireAdmin = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
@@ -42,7 +42,7 @@ export const requireAdmin = createMiddleware<{ Variables: AuthVariables }>(
     }
     let payload: AccessTokenPayload;
     try {
-      payload = await verifyAccessToken(token);
+      payload = await verifyAccessToken(token, { audience: "admin" });
     } catch {
       return c.json({ ok: false, error: "invalid token" }, 401);
     }

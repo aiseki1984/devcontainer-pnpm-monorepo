@@ -11,6 +11,10 @@ export interface AccessTokenPayload {
   email: string;
 }
 
+export interface VerifyAccessTokenOptions {
+  audience?: Role;
+}
+
 /** アクセストークンの有効期限（リフレッシュトークンで再発行する前提の短命）。 */
 const ACCESS_TOKEN_TTL = "15m";
 
@@ -22,11 +26,16 @@ function getSecretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
+function isRole(value: unknown): value is Role {
+  return value === "user" || value === "admin";
+}
+
 /** アクセストークン（短命 JWT・HS256）を発行する。 */
 export function signAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT({ role: payload.role, email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(payload.sub)
+    .setAudience(payload.role)
     .setIssuedAt()
     .setExpirationTime(ACCESS_TOKEN_TTL)
     .sign(getSecretKey());
@@ -35,11 +44,27 @@ export function signAccessToken(payload: AccessTokenPayload): Promise<string> {
 /** アクセストークンを検証して payload を返す。期限切れ・改ざんなら例外を投げる。 */
 export async function verifyAccessToken(
   token: string,
+  options: VerifyAccessTokenOptions = {},
 ): Promise<AccessTokenPayload> {
-  const { payload } = await jwtVerify(token, getSecretKey());
+  const { payload } = await jwtVerify(token, getSecretKey(), {
+    algorithms: ["HS256"],
+    audience: options.audience,
+  });
+  if (typeof payload.sub !== "string") {
+    throw new Error("invalid token subject");
+  }
+  if (!isRole(payload.role)) {
+    throw new Error("invalid token role");
+  }
+  if (options.audience && payload.role !== options.audience) {
+    throw new Error("token role does not match audience");
+  }
+  if (typeof payload.email !== "string") {
+    throw new Error("invalid token email");
+  }
   return {
-    sub: payload.sub ?? "",
-    role: payload.role as Role,
-    email: typeof payload.email === "string" ? payload.email : "",
+    sub: payload.sub,
+    role: payload.role,
+    email: payload.email,
   };
 }
