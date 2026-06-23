@@ -1,4 +1,4 @@
-import { count, desc } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { db } from "../client.js";
 import { contacts } from "../schema.js";
 
@@ -45,4 +45,10 @@ export function listContactsPage({
 export async function countContacts(): Promise<number> {
   const [row] = await db.select({ value: count() }).from(contacts);
   return row?.value ?? 0;
+}
+
+/** お問い合わせを id で 1 件取得する。存在しなければ null。 */
+export async function getContactById(id: number): Promise<Contact | null> {
+  const [row] = await db.select().from(contacts).where(eq(contacts.id, id));
+  return row ?? null;
 }

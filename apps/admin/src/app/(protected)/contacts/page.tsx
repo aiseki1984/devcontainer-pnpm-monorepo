@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { adminApiGet } from "../../../lib/server-api";
 import { Pagination } from "../../../components/pagination";
@@ -65,22 +66,32 @@ export default async function ContactsPage({
         <p className="text-sm text-zinc-500">お問い合わせはまだありません。</p>
       ) : (
         <>
+          <Pagination
+            basePath="/contacts"
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+          />
+
           <ul className="flex flex-col gap-3">
             {data.map((contact) => (
-              <li
-                key={contact.id}
-                className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.145] dark:bg-zinc-950"
-              >
-                <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="font-medium">{contact.title}</h2>
-                  <time className="shrink-0 text-xs text-zinc-500">
-                    {new Date(contact.createdAt).toLocaleString("ja-JP")}
-                  </time>
-                </div>
-                <p className="text-sm text-zinc-500">
-                  {contact.name}（{contact.email}）
-                </p>
-                <p className="whitespace-pre-wrap text-sm">{contact.message}</p>
+              <li key={contact.id}>
+                <Link
+                  href={`/contacts/${contact.id}`}
+                  className="flex flex-col gap-2 rounded-2xl border border-black/[.08] bg-white p-5 transition-colors hover:bg-black/[.02] dark:border-white/[.145] dark:bg-zinc-950 dark:hover:bg-white/[.04]"
+                >
+                  <div className="flex items-baseline justify-between gap-4">
+                    <h2 className="font-medium">{contact.title}</h2>
+                    <time className="shrink-0 text-xs text-zinc-500">
+                      {new Date(contact.createdAt).toLocaleString("ja-JP")}
+                    </time>
+                  </div>
+                  <p className="text-sm text-zinc-500">
+                    {contact.name}（{contact.email}）
+                  </p>
+                  <p className="line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {contact.message}
+                  </p>
+                </Link>
               </li>
             ))}
           </ul>

@@ -8,6 +8,7 @@ import {
 import {
   countContacts,
   createContact,
+  getContactById,
   listContactsPage,
 } from "@pnpm-test-workspace/db";
 import { userAuthRoutes } from "./auth/user-routes.js";
@@ -68,6 +69,19 @@ app.get("/admin/contacts", requireAdmin, async (c) => {
     data: rows,
     pagination: { page, perPage, total, totalPages },
   });
+});
+
+// 管理者だけが、お問い合わせ 1 件の詳細を取得できる。
+app.get("/admin/contacts/:id", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id < 1) {
+    return c.json({ ok: false, error: "invalid id" }, 400);
+  }
+  const contact = await getContactById(id);
+  if (!contact) {
+    return c.json({ ok: false, error: "not found" }, 404);
+  }
+  return c.json({ ok: true, data: contact });
 });
 
 serve(
