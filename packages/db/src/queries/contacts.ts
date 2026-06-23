@@ -17,11 +17,6 @@ export async function createContact(input: NewContact): Promise<Contact> {
   return created;
 }
 
-/** お問い合わせを新しい順に取得する。 */
-export function listContacts(): Promise<Contact[]> {
-  return db.select().from(contacts).orderBy(desc(contacts.createdAt));
-}
-
 /**
  * お問い合わせを新しい順に 1 ページ分だけ取得する。
  * createdAt が同値でも並びが安定するよう id を第 2 ソートキーにする（ページ境界のぶれ防止）。
