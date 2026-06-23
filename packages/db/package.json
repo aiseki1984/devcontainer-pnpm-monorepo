@@ -19,7 +19,7 @@
     "dev": "tsc -p tsconfig.build.json --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/seed.ts",
+    "db:seed": "pnpm --filter @pnpm-test-workspace/auth build && tsx src/seed.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "lint": "eslint .",
