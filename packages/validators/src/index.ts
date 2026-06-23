@@ -16,6 +16,16 @@ export const contactSchema = z.object({
 });
 export type ContactInput = z.infer<typeof contactSchema>;
 
+/**
+ * 一覧取得のページネーション query。文字列の query を数値へ変換し、安全な範囲に収める。
+ * 不正値（非数値・範囲外）は .catch でデフォルトに倒し、一覧 API が 400 で落ちないようにする。
+ */
+export const paginationSchema = z.object({
+  page: z.coerce.number().int().min(1).catch(1),
+  perPage: z.coerce.number().int().min(1).max(100).catch(20),
+});
+export type PaginationInput = z.infer<typeof paginationSchema>;
+
 /** パスワード（ハッシュ前の平文）に対するルール。登録時に適用する。 */
 export const passwordSchema = z.string().min(8).max(100);
 

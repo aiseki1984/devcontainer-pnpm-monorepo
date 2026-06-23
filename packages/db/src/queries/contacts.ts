@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { count, desc } from "drizzle-orm";
 import { db } from "../client.js";
 import { contacts } from "../schema.js";
 
@@ -20,4 +20,29 @@ export async function createContact(input: NewContact): Promise<Contact> {
 /** お問い合わせを新しい順に取得する。 */
 export function listContacts(): Promise<Contact[]> {
   return db.select().from(contacts).orderBy(desc(contacts.createdAt));
+}
+
+/**
+ * お問い合わせを新しい順に 1 ページ分だけ取得する。
+ * createdAt が同値でも並びが安定するよう id を第 2 ソートキーにする（ページ境界のぶれ防止）。
+ */
+export function listContactsPage({
+  limit,
+  offset,
+}: {
+  limit: number;
+  offset: number;
+}): Promise<Contact[]> {
+  return db
+    .select()
+    .from(contacts)
+    .orderBy(desc(contacts.createdAt), desc(contacts.id))
+    .limit(limit)
+    .offset(offset);
+}
+
+/** お問い合わせの総件数（ページ総数の算出に使う）。 */
+export async function countContacts(): Promise<number> {
+  const [row] = await db.select({ value: count() }).from(contacts);
+  return row?.value ?? 0;
 }
