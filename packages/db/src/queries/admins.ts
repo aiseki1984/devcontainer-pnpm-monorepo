@@ -14,6 +14,12 @@ export async function getAdminByEmail(email: string): Promise<Admin | null> {
   return admin ?? null;
 }
 
+/** id で管理者を引く。存在しなければ null（リフレッシュ時の再取得などで使う）。 */
+export async function getAdminById(id: number): Promise<Admin | null> {
+  const [admin] = await db.select().from(admins).where(eq(admins.id, id));
+  return admin ?? null;
+}
+
 /** 管理者を作成し、作成された行を返す（自己登録はせず seed / 管理操作で使う想定）。 */
 export async function createAdmin(input: NewAdmin): Promise<Admin> {
   const [created] = await db.insert(admins).values(input).returning();
