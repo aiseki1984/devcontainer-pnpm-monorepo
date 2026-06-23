@@ -63,6 +63,28 @@ Content-Type: application/json
   "password": "short"
 }
 
+### --- 管理者認証 ---
+### 自己登録は無し（admin は db:seed で投入。既定: admin@example.com / adminpass）。
+### user とは別 Cookie（admin_access_token / admin_refresh_token）。
+
+### 管理者ログイン → 200 { ok: true, admin }
+POST {{host}}/admin/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "adminpass"
+}
+
+### 管理者の情報 → 200（admin access Cookie + role==="admin" を検証）
+GET {{host}}/admin/me
+
+### 管理者リフレッシュ → 200（ローテーション）
+POST {{host}}/admin/auth/refresh
+
+### 管理者ログアウト → 200
+POST {{host}}/admin/auth/logout
+
 ### お問い合わせ（正常系）→ 201 { ok: true, data }（DB に保存される）
 POST {{host}}/contact
 Content-Type: application/json

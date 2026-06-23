@@ -28,6 +28,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@pnpm-test-workspace/auth": "workspace:*",
     "@pnpm-test-workspace/eslint-config": "workspace:*",
     "@pnpm-test-workspace/tsconfig": "workspace:*",
     "@types/node": "^20.11.17",

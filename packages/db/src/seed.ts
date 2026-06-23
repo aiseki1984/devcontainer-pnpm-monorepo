@@ -5,8 +5,16 @@
  * 冪等にするため、既存の contacts を消してから入れ直す。
  * 本番では使わない。
  */
+import { hashPassword } from "@pnpm-test-workspace/auth";
 import { db } from "./client.js";
-import { contacts } from "./schema.js";
+import { admins, contacts } from "./schema.js";
+
+/** 開発用の管理者。自己登録は無いので seed で投入する。 */
+const sampleAdmin = {
+  name: "管理者",
+  email: "admin@example.com",
+  password: "adminpass",
+};
 
 const sampleContacts: (typeof contacts.$inferInsert)[] = [
   {
@@ -35,8 +43,22 @@ async function seed() {
 
   console.log(`[seed] inserting ${sampleContacts.length} contacts ...`);
   const inserted = await db.insert(contacts).values(sampleContacts).returning();
+  console.log(`[seed] ${inserted.length} contacts inserted.`);
 
-  console.log(`[seed] done. ${inserted.length} rows inserted.`);
+  console.log("[seed] clearing admins ...");
+  await db.delete(admins); // admin_refresh_tokens は FK cascade で消える
+
+  console.log("[seed] inserting admin ...");
+  const passwordHash = await hashPassword(sampleAdmin.password);
+  await db.insert(admins).values({
+    name: sampleAdmin.name,
+    email: sampleAdmin.email,
+    passwordHash,
+  });
+  console.log(
+    `[seed] admin: ${sampleAdmin.email} / ${sampleAdmin.password} (dev only)`,
+  );
+  console.log("[seed] done.");
 }
 
 seed()
