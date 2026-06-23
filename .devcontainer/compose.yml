@@ -7,6 +7,10 @@ services:
       - ..:/workspace:cached
       - pnpm_store:/home/vscode/.local/share/pnpm/store
     command: sleep infinity
+    # Codex の sandbox / bubblewrap が user namespace を作れるようにする。
+    # Docker のデフォルト seccomp では unshare(CLONE_NEWUSER) が EPERM になることがある。
+    security_opt:
+      - seccomp=unconfined
     # アプリ用の環境変数(DATABASE_URL, JWT_SECRET など)はここには置かない。
     # root の npm scripts が dotenv-cli で .env を読み込む。compose には
     # コンテナ自体に必要なインフラ系の変数だけを置く。
