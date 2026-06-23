@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextPath } from "@pnpm-test-workspace/validators";
 import { API_URL } from "../../../lib/api";
 
 /**
@@ -8,10 +9,12 @@ import { API_URL } from "../../../lib/api";
  * 盗難検知（reuse 扱い）を誤爆させることがない。SSR 完了時＝クライアント mount 前に発火する。
  */
 export async function GET(req: NextRequest) {
-  // オープンリダイレクト防止: 内部の絶対パス（"/foo"）だけ許可する。
-  const raw = req.nextUrl.searchParams.get("next");
-  const next =
-    raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/mypage";
+  // オープンリダイレクト防止: 同一オリジンに解決できるパスだけ許可（バックスラッシュ等のバイパス対策は validators 側）。
+  const next = safeNextPath(
+    req.nextUrl.searchParams.get("next"),
+    req.nextUrl.origin,
+    "/mypage",
+  );
 
   const cookieHeader = (await cookies()).toString();
   const refreshed = await fetch(`${API_URL}/auth/refresh`, {
