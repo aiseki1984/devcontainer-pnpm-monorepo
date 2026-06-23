@@ -10,10 +10,24 @@ export default function MyPage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
 
-  // access Cookie の有無は middleware が弾くが、トークンの有効性は /me で確認する。
+  // access Cookie の有無は proxy が弾くが、トークンの有効性は /me で確認する。
+  // access JWT が切れていても（401）、refresh で一度だけ再発行を試みてから判定する。
   useEffect(() => {
     let active = true;
-    fetch(`${API_URL}/me`, { credentials: "include" })
+
+    async function fetchMe(): Promise<Response> {
+      const res = await fetch(`${API_URL}/me`, { credentials: "include" });
+      if (res.status !== 401) return res;
+      // access 切れ → refresh を試し、成功したら /me を取り直す。
+      const refreshed = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!refreshed.ok) return res;
+      return fetch(`${API_URL}/me`, { credentials: "include" });
+    }
+
+    fetchMe()
       .then(async (res) => {
         if (!res.ok) throw new Error("unauthorized");
         const data = (await res.json()) as { user: Me };

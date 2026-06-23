@@ -9,11 +9,11 @@ export const ACCESS_COOKIE = "access_token";
 export const REFRESH_COOKIE = "refresh_token";
 
 const isProd = process.env.NODE_ENV === "production";
-const ACCESS_MAX_AGE = 60 * 15; // 15分（access JWT の exp と揃える）
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 30; // 30日
+// セッション窓（30日）。access/refresh の Cookie 寿命はこれに揃える。
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
 /** refresh トークンの寿命（ミリ秒）。DB の expires_at 計算に使う。 */
-export const REFRESH_MAX_AGE_MS = REFRESH_MAX_AGE * 1000;
+export const REFRESH_MAX_AGE_MS = SESSION_MAX_AGE * 1000;
 
 export function setAccessCookie(c: Context, token: string): void {
   setCookie(c, ACCESS_COOKIE, token, {
@@ -21,7 +21,10 @@ export function setAccessCookie(c: Context, token: string): void {
     sameSite: "Lax",
     secure: isProd, // 本番(HTTPS)のみ Secure
     path: "/",
-    maxAge: ACCESS_MAX_AGE,
+    // 中の JWT 自体は短命（15分・jwt.ts）。Cookie はセッション窓まで残し、
+    // 期限切れ JWT でも「セッションあり」の印として proxy にページを通させる。
+    // 実際の更新はクライアントが /auth/refresh を叩いて行う。
+    maxAge: SESSION_MAX_AGE,
   });
 }
 
@@ -31,7 +34,7 @@ export function setRefreshCookie(c: Context, token: string): void {
     sameSite: "Lax",
     secure: isProd,
     path: "/auth", // refresh と logout にだけ送られる
-    maxAge: REFRESH_MAX_AGE,
+    maxAge: SESSION_MAX_AGE,
   });
 }
 
