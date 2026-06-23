@@ -1,10 +1,19 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { contactSchema } from "@pnpm-test-workspace/validators";
-import { createContact, listContacts } from "@pnpm-test-workspace/db";
+import {
+  contactSchema,
+  paginationSchema,
+} from "@pnpm-test-workspace/validators";
+import {
+  countContacts,
+  createContact,
+  getContactById,
+  listContactsPage,
+} from "@pnpm-test-workspace/db";
 import { userAuthRoutes } from "./auth/user-routes.js";
 import { adminAuthRoutes } from "./auth/admin-routes.js";
+import { requireAdmin } from "./auth/middleware.js";
 
 const app = new Hono();
 
@@ -43,10 +52,36 @@ app.post("/contact", async (c) => {
   return c.json({ ok: true, data: created }, 201);
 });
 
-// 保存済みのお問い合わせ一覧を新しい順で返す。
-app.get("/contacts", async (c) => {
-  const rows = await listContacts();
-  return c.json({ ok: true, data: rows });
+// 管理者だけが、保存済みのお問い合わせ一覧を新しい順・ページ単位で取得できる。
+app.get("/admin/contacts", requireAdmin, async (c) => {
+  // 不正な query はデフォルト（page=1, perPage=20）に倒れる（paginationSchema の .catch）。
+  const { page, perPage } = paginationSchema.parse({
+    page: c.req.query("page"),
+    perPage: c.req.query("perPage"),
+  });
+  const [rows, total] = await Promise.all([
+    listContactsPage({ limit: perPage, offset: (page - 1) * perPage }),
+    countContacts(),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  return c.json({
+    ok: true,
+    data: rows,
+    pagination: { page, perPage, total, totalPages },
+  });
+});
+
+// 管理者だけが、お問い合わせ 1 件の詳細を取得できる。
+app.get("/admin/contacts/:id", requireAdmin, async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id < 1) {
+    return c.json({ ok: false, error: "invalid id" }, 400);
+  }
+  const contact = await getContactById(id);
+  if (!contact) {
+    return c.json({ ok: false, error: "not found" }, 404);
+  }
+  return c.json({ ok: true, data: contact });
 });
 
 serve(

@@ -6,7 +6,8 @@
     "WEB_ORIGIN",
     "ADMIN_ORIGIN",
     "API_PORT",
-    "NODE_ENV"
+    "NODE_ENV",
+    "NEXT_PUBLIC_API_URL"
   ],
   "tasks": {
     "dev": {

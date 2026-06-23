@@ -7,7 +7,7 @@
  */
 import { hashPassword } from "@pnpm-test-workspace/auth";
 import { db } from "./client.js";
-import { admins, contacts } from "./schema.js";
+import { admins, contacts, users } from "./schema.js";
 
 /** 開発用の管理者。自己登録は無いので seed で投入する。 */
 const sampleAdmin = {
@@ -16,26 +16,74 @@ const sampleAdmin = {
   password: "adminpass",
 };
 
-const sampleContacts: (typeof contacts.$inferInsert)[] = [
-  {
-    name: "佐藤太郎",
-    email: "taro@example.com",
-    title: "資料請求",
-    message: "サービスの資料を送ってください。",
-  },
-  {
-    name: "鈴木花子",
-    email: "hanako@example.com",
-    title: "見積もり依頼",
-    message: "導入費用の見積もりをお願いします。",
-  },
-  {
-    name: "山田一郎",
-    email: "ichiro@example.com",
-    title: "不具合報告",
-    message: "送信ボタンが反応しないことがあります。",
-  },
+/** 開発用の一般ユーザー。register でも作れるが、初期確認用に seed で投入しておく。 */
+const sampleUser = {
+  name: "山田太郎",
+  email: "taro@example.com",
+  password: "supersecret",
+};
+
+/** ページネーション確認用に投入するお問い合わせ件数。 */
+const CONTACT_COUNT = 120;
+
+const lastNames = [
+  "佐藤",
+  "鈴木",
+  "高橋",
+  "田中",
+  "渡辺",
+  "伊藤",
+  "山本",
+  "中村",
+  "小林",
+  "加藤",
 ];
+const firstNames = [
+  "太郎",
+  "花子",
+  "一郎",
+  "美咲",
+  "健太",
+  "由美",
+  "翔",
+  "彩",
+  "大輔",
+  "葵",
+];
+const titles = [
+  "資料請求",
+  "見積もり依頼",
+  "不具合報告",
+  "導入のご相談",
+  "サポート希望",
+  "料金についての質問",
+  "機能のご要望",
+  "アカウントについて",
+  "その他お問い合わせ",
+  "解約について",
+];
+
+/**
+ * ページネーション確認用にお問い合わせを生成する。
+ * createdAt を 1 件ごとに 1 時間ずつ過去へずらし、新しい順の並びが一意に定まるようにする
+ * （同時刻だと desc の並びが安定せず、ページ境界がぶれるため）。
+ */
+function buildSampleContacts(): (typeof contacts.$inferInsert)[] {
+  const now = Date.now();
+  return Array.from({ length: CONTACT_COUNT }, (_, i) => {
+    const name = `${lastNames[i % lastNames.length]}${firstNames[(i * 7) % firstNames.length]}`;
+    const title = titles[i % titles.length];
+    return {
+      name,
+      email: `contact${String(i + 1).padStart(3, "0")}@example.com`,
+      title: `${title}（#${i + 1}）`,
+      message: `${name}です。「${title}」の件でご連絡しました。確認をお願いします。`,
+      createdAt: new Date(now - i * 60 * 60 * 1000),
+    };
+  });
+}
+
+const sampleContacts = buildSampleContacts();
 
 async function seed() {
   console.log("[seed] clearing contacts ...");
@@ -57,6 +105,20 @@ async function seed() {
   });
   console.log(
     `[seed] admin: ${sampleAdmin.email} / ${sampleAdmin.password} (dev only)`,
+  );
+
+  console.log("[seed] clearing users ...");
+  await db.delete(users); // user_refresh_tokens は FK cascade で消える
+
+  console.log("[seed] inserting user ...");
+  const userPasswordHash = await hashPassword(sampleUser.password);
+  await db.insert(users).values({
+    name: sampleUser.name,
+    email: sampleUser.email,
+    passwordHash: userPasswordHash,
+  });
+  console.log(
+    `[seed] user: ${sampleUser.email} / ${sampleUser.password} (dev only)`,
   );
   console.log("[seed] done.");
 }

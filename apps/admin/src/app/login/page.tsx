@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
 import { useAuth } from "../../components/auth-provider";
 
+// 開発用にデフォルトの管理者アカウントを用意しています。
+// 本番環境ではこのアカウントは使用しないでください。
+const DEFAULT_ADMIN = {
+  email: "admin@example.com",
+  password: "adminpass",
+};
+
 export default function AdminLoginPage() {
   const router = useRouter();
   const { reload } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(DEFAULT_ADMIN.email);
+  const [password, setPassword] = useState(DEFAULT_ADMIN.password);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
