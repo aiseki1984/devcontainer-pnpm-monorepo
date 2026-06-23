@@ -34,6 +34,21 @@ Scope to one package with `--filter`, e.g.:
 
 Husky runs lint-staged (prettier) on commit and `pnpm ci` on push.
 
+## GitHub issue workflow
+
+When closing a GitHub issue, leave a short issue comment before closing it. The
+comment should mention:
+
+- the commit(s) or merge commit that fixed it,
+- the main behavior change,
+- the verification commands that passed,
+- any follow-up risk or intentionally deferred scope.
+
+Prefer commit messages or PR bodies that include `Fixes #<issue>` /
+`Closes #<issue>` when the issue should auto-close on merge. If closing manually,
+comment first, then close the issue as completed. This keeps the issue history
+useful even when the close is done through the GitHub API instead of the web UI.
+
 ## Critical conventions (these have bitten us)
 
 - **Internal packages are built and consumed from `dist`, not `src`.** `validators`, `auth`, and `db` compile with `tsc -p tsconfig.build.json` and expose `dist` via `exports`. Consumers (api/web/admin) import the built output — so after changing a package, its `dist` must be rebuilt (Turbo's `build.dependsOn: ["^build"]` handles this in `pnpm build`/`dev`). `dist` is gitignored; `packages/db/drizzle/` migrations are git-tracked.
