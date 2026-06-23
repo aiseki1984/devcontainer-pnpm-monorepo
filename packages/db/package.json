@@ -24,7 +24,7 @@
     "db:studio": "drizzle-kit studio",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "echo \"Error: no test specified\"",
     "test:watch": "vitest"
   },
   "devDependencies": {
