@@ -37,14 +37,21 @@ export async function findUserRefreshTokenByHash(
   return row ?? null;
 }
 
-/** 1件を失効させる（ローテーションで古いトークンを使い捨てにする）。有効なものだけ更新。 */
-export async function revokeUserRefreshToken(id: number): Promise<void> {
-  await db
+/**
+ * 1件を失効させる（ローテーションで古いトークンを使い捨てにする）。
+ * 有効（revoked_at IS NULL）な行だけを更新し、実際に失効できたかを返す。
+ * 条件付き UPDATE は原子的なので、同時リクエストでは 1 つだけが true を得る
+ * → 1 トークンから複数セッションが発行されるのを防げる。
+ */
+export async function revokeUserRefreshToken(id: number): Promise<boolean> {
+  const revoked = await db
     .update(userRefreshTokens)
     .set({ revokedAt: new Date() })
     .where(
       and(eq(userRefreshTokens.id, id), isNull(userRefreshTokens.revokedAt)),
-    );
+    )
+    .returning({ id: userRefreshTokens.id });
+  return revoked.length > 0;
 }
 
 /** あるユーザーの有効な全トークンを失効させる（使い回し検知時やログアウト時の防御）。 */

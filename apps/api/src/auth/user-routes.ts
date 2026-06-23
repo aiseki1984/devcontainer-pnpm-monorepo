@@ -144,8 +144,13 @@ userAuthRoutes.post("/auth/refresh", async (c) => {
     clearAuthCookies(c);
     return c.json({ ok: false, error: "user not found" }, 401);
   }
-  // 有効 → 古い refresh を使い捨てにし、新しい access + refresh を発行（ローテーション）。
-  await revokeUserRefreshToken(row.id);
+  // 古い refresh を条件付きで失効（revoked_at IS NULL の時だけ）。同時リクエストでは
+  // 1 つだけが成功し、残りは失効済みとして弾く → 1 トークンから複数セッションが出るのを防ぐ。
+  const rotated = await revokeUserRefreshToken(row.id);
+  if (!rotated) {
+    clearAuthCookies(c);
+    return c.json({ ok: false, error: "refresh token already used" }, 401);
+  }
   await issueSession(c, user);
   return c.json({ ok: true, user: publicUser(user) });
 });
