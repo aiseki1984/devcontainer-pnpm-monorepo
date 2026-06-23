@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { adminApiGet } from "../../../lib/server-api";
 import { Pagination } from "../../../components/pagination";
 
@@ -48,6 +49,13 @@ export default async function ContactsPage({
   }
 
   const { data, pagination } = (await res.json()) as ContactsResponse;
+  const hasContacts = pagination.total > 0;
+  const isOutOfRange = hasContacts && pagination.page > pagination.totalPages;
+  const isPageEmpty = hasContacts && data.length === 0;
+
+  if (isOutOfRange) {
+    redirect(`/contacts?page=${pagination.totalPages}`);
+  }
 
   return (
     <section className="flex flex-col gap-4">
@@ -56,8 +64,20 @@ export default async function ContactsPage({
         <span className="text-sm text-zinc-500">全 {pagination.total} 件</span>
       </div>
 
-      {data.length === 0 ? (
+      {!hasContacts ? (
         <p className="text-sm text-zinc-500">お問い合わせはまだありません。</p>
+      ) : isPageEmpty ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-zinc-500">
+            このページに該当するお問い合わせはありません。
+          </p>
+          <Link
+            href="/contacts"
+            className="w-fit rounded-md border border-black/[.12] px-3 py-1.5 text-sm transition-colors hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.06]"
+          >
+            1 ページ目へ戻る
+          </Link>
+        </div>
       ) : (
         <>
           <Pagination
