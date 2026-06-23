@@ -4,9 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "../../lib/api";
+import { useAuth } from "../../components/auth-provider";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { reload } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,9 +32,9 @@ export default function LoginPage() {
         setError(data?.error ?? "ログインに失敗しました");
         return;
       }
-      // ログイン成功。保護ページへ。refresh で middleware に最新 Cookie を反映。
+      // ログイン成功。認証状態を取り直してから保護ページへ。
+      await reload();
       router.push("/mypage");
-      router.refresh();
     } catch {
       setError("通信に失敗しました");
     } finally {
