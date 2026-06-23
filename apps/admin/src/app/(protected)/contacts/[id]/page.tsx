@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { adminApiGet } from "../../../../lib/server-api";
 
 /** API（GET /admin/contacts/:id）が返すお問い合わせ1件分の形。db の Contact に対応。 */
@@ -19,13 +19,8 @@ export default async function ContactDetailPage({
 }) {
   const { id } = await params;
 
+  // 認証は proxy（期限切れ→refresh）と adminApiGet（401→/login）が担う。ここは 404 だけ捌く。
   const res = await adminApiGet(`/admin/contacts/${id}`);
-  // JWT 切れ（access Cookie はあるが中身が期限切れ）→ 更新の単一経路へ。戻り先に現在の詳細を渡す。
-  if (res.status === 401) {
-    redirect(
-      `/admin/auth/refresh?next=${encodeURIComponent(`/contacts/${id}`)}`,
-    );
-  }
   if (res.status === 404) {
     notFound();
   }

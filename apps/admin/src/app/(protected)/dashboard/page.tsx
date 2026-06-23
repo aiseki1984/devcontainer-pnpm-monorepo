@@ -4,8 +4,8 @@ import { adminApiGet } from "../../../lib/server-api";
 type Me = { admin: { id: number; email: string; role: string } };
 
 export default async function DashboardPage() {
+  // 認証は proxy（期限切れ→refresh）と adminApiGet（401→/login）が担う。
   const res = await adminApiGet("/admin/me");
-  if (res.status === 401) redirect("/admin/auth/refresh?next=/dashboard");
   if (!res.ok) redirect("/login");
 
   const { admin } = (await res.json()) as Me;
