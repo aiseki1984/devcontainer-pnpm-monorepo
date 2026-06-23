@@ -3,9 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL } from "../../lib/api";
+import { useAuth } from "../../components/auth-provider";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { reload } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +31,8 @@ export default function AdminLoginPage() {
         setError(data?.error ?? "ログインに失敗しました");
         return;
       }
+      await reload();
       router.push("/dashboard");
-      router.refresh();
     } catch {
       setError("通信に失敗しました");
     } finally {
