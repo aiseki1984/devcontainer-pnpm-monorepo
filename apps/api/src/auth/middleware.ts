@@ -4,9 +4,9 @@ import {
   verifyAccessToken,
   type AccessTokenPayload,
 } from "@pnpm-test-workspace/auth";
-import { ACCESS_COOKIE } from "./cookies.js";
+import { ACCESS_COOKIE, ADMIN_ACCESS_COOKIE } from "./cookies.js";
 
-/** requireAuth が検証後に c.set("user", ...) で載せる Context 変数の型。 */
+/** requireAuth / requireAdmin が検証後に c.set("user", ...) で載せる Context 変数の型。 */
 export type AuthVariables = { user: AccessTokenPayload };
 
 /**
@@ -25,6 +25,31 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     } catch {
       return c.json({ ok: false, error: "invalid token" }, 401);
     }
+    await next();
+  },
+);
+
+/**
+ * 管理者用の保護ミドルウェア。admin の access Cookie を検証し、
+ * role === "admin" を必須とする。単一 JWT_SECRET なので user トークンでも署名検証は
+ * 通るが、role チェックで弾く（取り違え防止のため Cookie 名も別）。
+ */
+export const requireAdmin = createMiddleware<{ Variables: AuthVariables }>(
+  async (c, next) => {
+    const token = getCookie(c, ADMIN_ACCESS_COOKIE);
+    if (!token) {
+      return c.json({ ok: false, error: "not authenticated" }, 401);
+    }
+    let payload: AccessTokenPayload;
+    try {
+      payload = await verifyAccessToken(token);
+    } catch {
+      return c.json({ ok: false, error: "invalid token" }, 401);
+    }
+    if (payload.role !== "admin") {
+      return c.json({ ok: false, error: "forbidden" }, 403);
+    }
+    c.set("user", payload);
     await next();
   },
 );

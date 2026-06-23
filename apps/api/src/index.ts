@@ -4,12 +4,14 @@ import { cors } from "hono/cors";
 import { contactSchema } from "@pnpm-test-workspace/validators";
 import { createContact, listContacts } from "@pnpm-test-workspace/db";
 import { userAuthRoutes } from "./auth/user-routes.js";
+import { adminAuthRoutes } from "./auth/admin-routes.js";
 
 const app = new Hono();
 
 // Cookie 併用のクロスオリジンでは Allow-Origin に "*" を使えないので許可リストで明示する。
 const webOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
-app.use("/*", cors({ origin: [webOrigin], credentials: true }));
+const adminOrigin = process.env.ADMIN_ORIGIN ?? "http://localhost:3001";
+app.use("/*", cors({ origin: [webOrigin, adminOrigin], credentials: true }));
 
 app.get("/", (c) => {
   return c.text("Hello Hono!");
@@ -17,6 +19,9 @@ app.get("/", (c) => {
 
 // 一般ユーザーの認証（/auth/register, /auth/login, /auth/logout, /auth/refresh, /me）。
 app.route("/", userAuthRoutes);
+
+// 管理者の認証（/admin/auth/login, /admin/auth/logout, /admin/auth/refresh, /admin/me）。
+app.route("/", adminAuthRoutes);
 
 // 共有スキーマで受信ボディを検証し、DB に保存する。
 app.post("/contact", async (c) => {

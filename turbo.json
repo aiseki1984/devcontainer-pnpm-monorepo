@@ -4,6 +4,7 @@
     "DATABASE_URL",
     "JWT_SECRET",
     "WEB_ORIGIN",
+    "ADMIN_ORIGIN",
     "API_PORT",
     "NODE_ENV"
   ],
