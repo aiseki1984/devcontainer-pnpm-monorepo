@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -77,7 +78,14 @@ export const userRefreshTokens = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     ...refreshTokenColumns(),
   },
-  (t) => [index("user_refresh_tokens_user_id_idx").on(t.userId)],
+  (t) => [
+    index("user_refresh_tokens_user_id_idx").on(t.userId),
+    // 有効セッションの一覧・集計（revoked_at IS NULL の行だけを user_id で引く）を速くする
+    // 部分インデックス。単一使用ローテーションで失効済み行が溜まっても走査対象を絞れる。
+    index("user_refresh_tokens_active_idx")
+      .on(t.userId)
+      .where(sql`revoked_at IS NULL`),
+  ],
 );
 
 /** 管理者のリフレッシュトークン。形は user 版と同じで admin_id で admins を参照。 */

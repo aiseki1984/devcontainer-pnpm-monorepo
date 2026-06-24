@@ -15,6 +15,13 @@
       "when": 1782134345937,
       "tag": "0001_lucky_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782308091793,
+      "tag": "0002_overconfident_carlie_cooper",
+      "breakpoints": true
     }
   ]
 }

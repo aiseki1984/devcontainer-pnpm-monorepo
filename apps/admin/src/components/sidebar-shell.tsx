@@ -7,6 +7,7 @@ import { useAuth } from "./auth-provider";
 
 const navItems = [
   { href: "/dashboard", label: "ダッシュボード" },
+  { href: "/users", label: "ユーザー" },
   { href: "/contacts", label: "お問い合わせ" },
 ];
 

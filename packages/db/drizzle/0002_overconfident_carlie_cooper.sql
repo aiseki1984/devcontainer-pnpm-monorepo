@@ -1,0 +1,1 @@
+CREATE INDEX "user_refresh_tokens_active_idx" ON "user_refresh_tokens" USING btree ("user_id") WHERE revoked_at IS NULL;
