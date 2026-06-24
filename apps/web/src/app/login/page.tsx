@@ -1,13 +1,9 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loginSchema, type LoginInput } from "@pnpm-test-workspace/validators";
-import { API_URL } from "../../lib/api";
-import { toErrorMessage, type ErrorBody } from "../../lib/error-message";
-import { useAuth } from "../../components/auth-provider";
+import { loginSchema } from "@pnpm-test-workspace/validators";
+import { useAuthForm } from "../../lib/use-auth-form";
+import { TextField } from "../../components/text-field";
 
 // 開発用にデフォルトのユーザーアカウントを用意しています。
 // 本番環境ではこのアカウントは使用しないでください。
@@ -17,43 +13,12 @@ const DEFAULT_USER = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { reload } = useAuth();
-  // 入力検証は validators の loginSchema を resolver に渡して共有する
-  // （フロントとバックで同じスキーマ＝検証ルールの単一ソース）。
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+  const { register, onSubmit, errors, isSubmitting } = useAuthForm({
+    schema: loginSchema,
+    endpoint: "/auth/login",
     defaultValues: DEFAULT_USER,
-  });
-
-  const onSubmit = handleSubmit(async (values) => {
-    try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // Cookie を送受信する
-        body: JSON.stringify(values),
-      });
-      if (!res.ok) {
-        setError("root", {
-          message: toErrorMessage(
-            (await res.json().catch(() => null)) as ErrorBody | null,
-            "ログインに失敗しました",
-          ),
-        });
-        return;
-      }
-      // ログイン成功。認証状態を取り直してから保護ページへ。
-      await reload();
-      router.push("/mypage");
-    } catch {
-      setError("root", { message: "通信に失敗しました" });
-    }
+    fallbackError: "ログインに失敗しました",
+    redirectTo: "/mypage",
   });
 
   return (
@@ -70,33 +35,18 @@ export default function LoginPage() {
           </p>
         )}
 
-        <label className="flex flex-col gap-1 text-sm">
-          メールアドレス
-          <input
-            type="email"
-            {...register("email")}
-            className="rounded-md border border-black/[.12] bg-transparent px-3 py-2 outline-none focus:border-black dark:border-white/[.2] dark:focus:border-white"
-          />
-          {errors.email && (
-            <span className="text-xs text-red-600 dark:text-red-400">
-              {errors.email.message}
-            </span>
-          )}
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm">
-          パスワード
-          <input
-            type="password"
-            {...register("password")}
-            className="rounded-md border border-black/[.12] bg-transparent px-3 py-2 outline-none focus:border-black dark:border-white/[.2] dark:focus:border-white"
-          />
-          {errors.password && (
-            <span className="text-xs text-red-600 dark:text-red-400">
-              {errors.password.message}
-            </span>
-          )}
-        </label>
+        <TextField
+          label="メールアドレス"
+          type="email"
+          registration={register("email")}
+          error={errors.email}
+        />
+        <TextField
+          label="パスワード"
+          type="password"
+          registration={register("password")}
+          error={errors.password}
+        />
 
         <button
           type="submit"
