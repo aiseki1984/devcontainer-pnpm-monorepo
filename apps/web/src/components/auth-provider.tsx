@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { API_URL } from "../lib/api";
+import { fetchSession } from "../lib/session";
 
 export type Me = { id: number; email: string; name: string; role: string };
 
@@ -27,17 +28,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * 認証取得を 1 箇所に集約し、ヘッダーとページが別々に refresh して競合するのを防ぐ。
  */
 async function fetchMe(): Promise<Me | null> {
-  let res = await fetch(`${API_URL}/me`, { credentials: "include" });
-  if (res.status === 401) {
-    const refreshed = await fetch(`${API_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (refreshed.ok) {
-      res = await fetch(`${API_URL}/me`, { credentials: "include" });
-    }
-  }
-  return res.ok ? ((await res.json()).user as Me) : null;
+  return fetchSession({
+    mePath: `${API_URL}/me`,
+    refreshPath: `${API_URL}/auth/refresh`,
+    select: (body) => (body as { user: Me }).user,
+  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

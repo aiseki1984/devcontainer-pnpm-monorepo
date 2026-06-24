@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { getCookie } from "hono/cookie";
 import {
   verifyAccessToken,
+  type Role,
   type AccessTokenPayload,
 } from "@pnpm-test-workspace/auth";
 import { ACCESS_COOKIE, ADMIN_ACCESS_COOKIE } from "./cookies.js";
@@ -10,46 +11,28 @@ import { ACCESS_COOKIE, ADMIN_ACCESS_COOKIE } from "./cookies.js";
 export type AuthVariables = { user: AccessTokenPayload };
 
 /**
- * access Cookie を検証し、payload を c.set("user") に載せる保護ミドルウェア。
- * 未認証（Cookie 無し）や無効トークンなら後続ハンドラを呼ばず 401 を返す。
- * 保護したいルートに付けるだけでよい。
+ * role ごとの access Cookie を検証し、payload を c.set("user") に載せる保護ミドルウェア。
+ * audience と role は JWT 検証時点で固定し、user/admin トークンの取り違えを防ぐ。
  */
-export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
-  async (c, next) => {
-    const token = getCookie(c, ACCESS_COOKIE);
-    if (!token) {
-      return c.json({ ok: false, error: "not authenticated" }, 401);
-    }
-    try {
-      c.set("user", await verifyAccessToken(token, { audience: "user" }));
-    } catch {
-      return c.json({ ok: false, error: "invalid token" }, 401);
-    }
-    await next();
-  },
-);
-
-/**
- * 管理者用の保護ミドルウェア。admin の access Cookie を検証し、
- * audience === "admin" と role === "admin" を必須とする。単一 JWT_SECRET でも
- * user/admin トークンの用途を JWT 検証時点で分離する。
- */
-export const requireAdmin = createMiddleware<{ Variables: AuthVariables }>(
-  async (c, next) => {
-    const token = getCookie(c, ADMIN_ACCESS_COOKIE);
+function createRequireAuth(role: Role, cookieName: string) {
+  return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+    const token = getCookie(c, cookieName);
     if (!token) {
       return c.json({ ok: false, error: "not authenticated" }, 401);
     }
     let payload: AccessTokenPayload;
     try {
-      payload = await verifyAccessToken(token, { audience: "admin" });
+      payload = await verifyAccessToken(token, { audience: role });
     } catch {
       return c.json({ ok: false, error: "invalid token" }, 401);
     }
-    if (payload.role !== "admin") {
+    if (payload.role !== role) {
       return c.json({ ok: false, error: "forbidden" }, 403);
     }
     c.set("user", payload);
     await next();
-  },
-);
+  });
+}
+
+export const requireAuth = createRequireAuth("user", ACCESS_COOKIE);
+export const requireAdmin = createRequireAuth("admin", ADMIN_ACCESS_COOKIE);
