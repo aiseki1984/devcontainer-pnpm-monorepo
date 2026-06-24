@@ -21,7 +21,6 @@ export const adminAuthRoutes = new Hono();
 
 const adminAuth = createAuthRoutes({
   role: "admin",
-  responseKey: "admin",
   loginPath: "/admin/auth/login",
   logoutPath: "/admin/auth/logout",
   refreshPath: "/admin/auth/refresh",

@@ -30,7 +30,6 @@ type AuthRouteConfig<
   TRefresh extends RefreshTokenRow,
 > = {
   role: Role;
-  responseKey: "user" | "admin";
   loginPath: string;
   logoutPath: string;
   refreshPath: string;
@@ -53,29 +52,26 @@ type AuthRouteConfig<
   requireRole: MiddlewareHandler<{ Variables: AuthVariables }>;
 };
 
-function publicAccount<TAccount extends Account>(
-  account: TAccount,
-  role: Role,
-) {
-  return {
-    id: account.id,
-    email: account.email,
-    name: account.name,
-    role,
-  };
-}
-
-function jsonPayload(responseKey: "user" | "admin", account: unknown) {
-  return responseKey === "admin"
-    ? { ok: true, admin: account }
-    : { ok: true, user: account };
-}
-
 export function createAuthRoutes<
   TAccount extends Account,
   TRefresh extends RefreshTokenRow,
 >(config: AuthRouteConfig<TAccount, TRefresh>) {
   const routes = new Hono<{ Variables: AuthVariables }>();
+
+  function publicAccount(account: TAccount) {
+    return {
+      id: account.id,
+      email: account.email,
+      name: account.name,
+      role: config.role,
+    };
+  }
+
+  function sessionResponse(account: TAccount) {
+    return config.role === "admin"
+      ? { ok: true, admin: publicAccount(account) }
+      : { ok: true, user: publicAccount(account) };
+  }
 
   async function issueSession(c: Context, account: TAccount): Promise<void> {
     const accessToken = await signAccessToken({
@@ -116,9 +112,7 @@ export function createAuthRoutes<
       return c.json({ ok: false, error: "invalid email or password" }, 401);
     }
     await issueSession(c, account);
-    return c.json(
-      jsonPayload(config.responseKey, publicAccount(account, config.role)),
-    );
+    return c.json(sessionResponse(account));
   });
 
   routes.post(config.logoutPath, async (c) => {
@@ -157,10 +151,7 @@ export function createAuthRoutes<
     const account = await config.getById(accountId);
     if (!account) {
       config.clearCookies(c);
-      return c.json(
-        { ok: false, error: `${config.responseKey} not found` },
-        401,
-      );
+      return c.json({ ok: false, error: `${config.role} not found` }, 401);
     }
     const rotated = await config.revokeRefreshToken(row.id);
     if (!rotated) {
@@ -168,28 +159,21 @@ export function createAuthRoutes<
       return c.json({ ok: false, error: "refresh token already used" }, 401);
     }
     await issueSession(c, account);
-    return c.json(
-      jsonPayload(config.responseKey, publicAccount(account, config.role)),
-    );
+    return c.json(sessionResponse(account));
   });
 
   routes.get(config.mePath, config.requireRole, async (c) => {
     const payload = c.get("user");
     const account = await config.getById(Number(payload.sub));
     if (!account) {
-      return c.json(
-        { ok: false, error: `${config.responseKey} not found` },
-        401,
-      );
+      return c.json({ ok: false, error: `${config.role} not found` }, 401);
     }
-    return c.json(
-      jsonPayload(config.responseKey, publicAccount(account, config.role)),
-    );
+    return c.json(sessionResponse(account));
   });
 
   return {
     routes,
     issueSession,
-    publicAccount: (account: TAccount) => publicAccount(account, config.role),
+    publicAccount,
   };
 }
