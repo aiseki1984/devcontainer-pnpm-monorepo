@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApiPost } from "../lib/client-api";
 import { toErrorMessage } from "../lib/error-message";
@@ -18,9 +18,11 @@ export type Session = {
 
 /**
  * ユーザーのアクティブなログインセッション一覧 + 失効操作（クライアント）。
- * 失効は API への直 fetch（cookie 同送）で行い、成功後は router.refresh() で
- * サーバ側の一覧を取り直す。mutation の pending/error は useState で素朴に持つ
- * （フォーム基盤ステップで useActionState に置き換える前提のミニマル実装）。
+ *
+ * mutation の pending/error は React 標準の useActionState で扱う（RHF フォームとは
+ * 別系統の「アクション」パターンの例）。action の戻り値がそのまま state＝エラー文言になり、
+ * isPending が処理中フラグになる。成功時は router.refresh() でサーバ側の一覧を取り直す。
+ * isPending は全体共有なので、どのボタンを押したかは pendingTarget で別途持ってラベルに使う。
  */
 export function SessionActions({
   userId,
@@ -30,27 +32,30 @@ export function SessionActions({
   sessions: Session[];
 }) {
   const router = useRouter();
-  // 操作中の対象（"all" または セッション id）。二重押下防止と行ごとの無効化に使う。
-  const [pending, setPending] = useState<"all" | number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // 「失効中…」ラベルをどのボタンに出すか（isPending は全体共有なので別途保持）。
+  const [pendingTarget, setPendingTarget] = useState<"all" | number | null>(
+    null,
+  );
 
-  async function revoke(target: "all" | number) {
-    setError(null);
-    setPending(target);
-    try {
-      const path =
-        target === "all"
-          ? `/admin/users/${userId}/sessions/revoke`
-          : `/admin/users/${userId}/sessions/${target}/revoke`;
-      const res = await adminApiPost(path);
-      if (!res.ok) {
-        setError(toErrorMessage(await res.json(), "失効に失敗しました。"));
-        return;
-      }
-      router.refresh();
-    } finally {
-      setPending(null);
+  const [error, submitRevoke, isPending] = useActionState<
+    string | null,
+    "all" | number
+  >(async (_prev, target) => {
+    const path =
+      target === "all"
+        ? `/admin/users/${userId}/sessions/revoke`
+        : `/admin/users/${userId}/sessions/${target}/revoke`;
+    const res = await adminApiPost(path);
+    if (!res.ok) {
+      return toErrorMessage(await res.json(), "失効に失敗しました。");
     }
+    router.refresh();
+    return null;
+  }, null);
+
+  function revoke(target: "all" | number) {
+    setPendingTarget(target);
+    submitRevoke(target);
   }
 
   return (
@@ -65,10 +70,12 @@ export function SessionActions({
         {sessions.length > 0 && (
           <button
             onClick={() => revoke("all")}
-            disabled={pending !== null}
+            disabled={isPending}
             className="rounded-full border border-red-600/40 px-3 py-1 text-sm text-red-700 transition-colors hover:bg-red-600/[.06] disabled:opacity-50 dark:text-red-400"
           >
-            {pending === "all" ? "失効中…" : "全セッションを失効"}
+            {isPending && pendingTarget === "all"
+              ? "失効中…"
+              : "全セッションを失効"}
           </button>
         )}
       </div>
@@ -98,10 +105,10 @@ export function SessionActions({
               </div>
               <button
                 onClick={() => revoke(session.id)}
-                disabled={pending !== null}
+                disabled={isPending}
                 className="shrink-0 rounded-full border border-black/[.12] px-3 py-1 transition-colors hover:bg-black/[.04] disabled:opacity-50 dark:border-white/[.2] dark:hover:bg-white/[.06]"
               >
-                {pending === session.id ? "失効中…" : "失効"}
+                {isPending && pendingTarget === session.id ? "失効中…" : "失効"}
               </button>
             </li>
           ))}

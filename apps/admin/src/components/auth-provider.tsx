@@ -1,17 +1,9 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-import { API_URL } from "../lib/api";
-import { fetchSession } from "../lib/session";
+import { useEffect, type ReactNode } from "react";
+import { useAuthStore, type Admin } from "../lib/auth-store";
 
-export type Admin = { id: number; email: string; name: string; role: string };
+export type { Admin };
 
 type AuthContextValue = {
   admin: Admin | null;
@@ -21,67 +13,26 @@ type AuthContextValue = {
   logout: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+/**
+ * 認証状態は zustand ストア（useAuthStore）が持つので Provider は状態を持たない。
+ * 役割は初回マウントで /admin/me を一度だけ取りにいくこと（旧 Context 実装の useEffect 相当）。
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const load = useAuthStore((s) => s.load);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return <>{children}</>;
+}
 
 /**
- * /admin/me を取得し、401 なら一度だけ /admin/auth/refresh を試す純粋関数。
- * 認証取得を 1 箇所に集約し、サイドバーとページが別々に refresh して競合するのを防ぐ。
+ * 認証状態フック。外形は従来の Context 版と同じ（admin/loading/reload/logout）なので
+ * 呼び出し側は変更不要。中身は zustand ストアを読むだけ。
  */
-async function fetchAdmin(): Promise<Admin | null> {
-  return fetchSession({
-    mePath: `${API_URL}/admin/me`,
-    refreshPath: `${API_URL}/admin/auth/refresh`,
-    select: (body) => (body as { admin: Admin }).admin,
-  });
-}
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [admin, setAdmin] = useState<Admin | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const reload = useCallback(async () => {
-    const next = await fetchAdmin().catch(() => null);
-    setAdmin(next);
-    setLoading(false);
-  }, []);
-
-  const logout = useCallback(async () => {
-    await fetch(`${API_URL}/admin/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
-    setAdmin(null);
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    fetchAdmin()
-      .then((next) => {
-        if (active) {
-          setAdmin(next);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setAdmin(null);
-          setLoading(false);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return (
-    <AuthContext.Provider value={{ admin, loading, reload, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
 export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const admin = useAuthStore((s) => s.admin);
+  const loading = useAuthStore((s) => s.loading);
+  const reload = useAuthStore((s) => s.load);
+  const logout = useAuthStore((s) => s.logout);
+  return { admin, loading, reload, logout };
 }

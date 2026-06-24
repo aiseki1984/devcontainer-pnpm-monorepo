@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  registerSchema,
+  type RegisterInput,
+} from "@pnpm-test-workspace/validators";
 import { API_URL } from "../../lib/api";
 import { toErrorMessage, type ErrorBody } from "../../lib/error-message";
 import { useAuth } from "../../components/auth-provider";
@@ -10,41 +15,42 @@ import { useAuth } from "../../components/auth-provider";
 export default function RegisterPage() {
   const router = useRouter();
   const { reload } = useAuth();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  // 入力検証は validators の registerSchema を resolver に渡して共有する
+  // （フロントとバックで同じスキーマ＝検証ルールの単一ソース）。
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterInput>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { name: "", email: "", password: "" },
+  });
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setPending(true);
+  const onSubmit = handleSubmit(async (values) => {
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify(values),
       });
       if (!res.ok) {
-        setError(
-          toErrorMessage(
+        setError("root", {
+          message: toErrorMessage(
             (await res.json().catch(() => null)) as ErrorBody | null,
             "登録に失敗しました",
           ),
-        );
+        });
         return;
       }
       // 登録成功時はそのままログイン済み（Cookie 発行済み）。状態を取り直して保護ページへ。
       await reload();
       router.push("/mypage");
     } catch {
-      setError("通信に失敗しました");
-    } finally {
-      setPending(false);
+      setError("root", { message: "通信に失敗しました" });
     }
-  }
+  });
 
   return (
     <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
@@ -54,9 +60,9 @@ export default function RegisterPage() {
       >
         <h1 className="text-2xl font-semibold tracking-tight">新規登録</h1>
 
-        {error && (
+        {errors.root && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-            {error}
+            {errors.root.message}
           </p>
         )}
 
@@ -64,42 +70,50 @@ export default function RegisterPage() {
           名前
           <input
             type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            {...register("name")}
             className="rounded-md border border-black/[.12] bg-transparent px-3 py-2 outline-none focus:border-black dark:border-white/[.2] dark:focus:border-white"
           />
+          {errors.name && (
+            <span className="text-xs text-red-600 dark:text-red-400">
+              {errors.name.message}
+            </span>
+          )}
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
           メールアドレス
           <input
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            {...register("email")}
             className="rounded-md border border-black/[.12] bg-transparent px-3 py-2 outline-none focus:border-black dark:border-white/[.2] dark:focus:border-white"
           />
+          {errors.email && (
+            <span className="text-xs text-red-600 dark:text-red-400">
+              {errors.email.message}
+            </span>
+          )}
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
           パスワード（8 文字以上）
           <input
             type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            {...register("password")}
             className="rounded-md border border-black/[.12] bg-transparent px-3 py-2 outline-none focus:border-black dark:border-white/[.2] dark:focus:border-white"
           />
+          {errors.password && (
+            <span className="text-xs text-red-600 dark:text-red-400">
+              {errors.password.message}
+            </span>
+          )}
         </label>
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={isSubmitting}
           className="mt-2 h-11 rounded-full bg-foreground font-medium text-background transition-colors hover:bg-[#383838] disabled:opacity-50 dark:hover:bg-[#ccc]"
         >
-          {pending ? "登録中…" : "登録"}
+          {isSubmitting ? "登録中…" : "登録"}
         </button>
 
         <p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
