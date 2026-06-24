@@ -25,6 +25,15 @@ function fetchAdmin(): Promise<Admin | null> {
 }
 
 /**
+ * load()/logout() の世代カウンタ。store は module-level シングルトンで、
+ * 旧 Context のような mount/unmount 単位のクリーンアップが効かないため、
+ * 「最後に開始した操作」だけが状態を確定できるようにして遅延解決のレースを防ぐ。
+ * 例: 古い load() の fetch が遅れて解決しても、その後 login(=load) や logout が
+ * 走っていれば結果を破棄する。
+ */
+let authGeneration = 0;
+
+/**
  * 認証状態（現在の admin と読み込み状態）のグローバルストア。
  * React Context の代わりに zustand を使うクライアント状態の例。
  *
@@ -36,14 +45,20 @@ export const useAuthStore = create<AuthState>((set) => ({
   admin: null,
   loading: true,
   load: async () => {
+    const generation = ++authGeneration;
+    set({ loading: true });
     const admin = await fetchAdmin().catch(() => null);
+    // 自分より後に load/logout が始まっていたら、古い結果で上書きしない。
+    if (generation !== authGeneration) return;
     set({ admin, loading: false });
   },
   logout: async () => {
+    // 進行中の load があってもログアウトを上書きさせない。
+    authGeneration++;
     await fetch(`${API_URL}/admin/auth/logout`, {
       method: "POST",
       credentials: "include",
     });
-    set({ admin: null });
+    set({ admin: null, loading: false });
   },
 }));
