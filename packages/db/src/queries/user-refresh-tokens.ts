@@ -1,9 +1,18 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "../client.js";
 import { userRefreshTokens } from "../schema.js";
 
 /** 一般ユーザーのリフレッシュトークン1行分。token_hash のみ保持（生トークンは持たない）。 */
 export type UserRefreshToken = typeof userRefreshTokens.$inferSelect;
+
+/**
+ * 管理画面に見せる「セッション」1行分。token_hash は絶対に含めない（明示射影）。
+ * ローテーションは単一使用なので、有効トークン1本 ≒ 1 デバイスのログインセッション。
+ */
+export type UserSessionRow = Pick<
+  UserRefreshToken,
+  "id" | "createdAt" | "expiresAt"
+>;
 
 /** 発行時に渡す形。id・revoked_at・created_at は DB 側で付与する。 */
 export interface NewUserRefreshToken {
@@ -67,4 +76,55 @@ export async function revokeAllUserRefreshTokens(
         isNull(userRefreshTokens.revokedAt),
       ),
     );
+}
+
+/**
+ * あるユーザーの「有効な」トークン（＝アクティブなログインセッション）を新しい順に取得する。
+ * 失効済み（revoked_at）・期限切れ（expires_at <= now）は除外。
+ * 管理画面で見せるため token_hash は select せず、必要な列だけを明示射影する。
+ */
+export function listActiveUserRefreshTokensByUserId(
+  userId: number,
+): Promise<UserSessionRow[]> {
+  return db
+    .select({
+      id: userRefreshTokens.id,
+      createdAt: userRefreshTokens.createdAt,
+      expiresAt: userRefreshTokens.expiresAt,
+    })
+    .from(userRefreshTokens)
+    .where(
+      and(
+        eq(userRefreshTokens.userId, userId),
+        isNull(userRefreshTokens.revokedAt),
+        gt(userRefreshTokens.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(userRefreshTokens.createdAt));
+}
+
+/**
+ * 管理者が「特定ユーザーの 1 セッション」を失効させる。
+ * id だけでなく user_id も条件に含めることで、他ユーザーのトークンを誤って／不正に
+ * 失効できないよう所有者スコープを強制する。実際に失効できたかを返す。
+ */
+export async function revokeUserRefreshTokenForUser({
+  userId,
+  id,
+}: {
+  userId: number;
+  id: number;
+}): Promise<boolean> {
+  const revoked = await db
+    .update(userRefreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(userRefreshTokens.id, id),
+        eq(userRefreshTokens.userId, userId),
+        isNull(userRefreshTokens.revokedAt),
+      ),
+    )
+    .returning({ id: userRefreshTokens.id });
+  return revoked.length > 0;
 }

@@ -13,6 +13,7 @@ import {
 } from "@pnpm-test-workspace/db";
 import { userAuthRoutes } from "./auth/user-routes.js";
 import { adminAuthRoutes } from "./auth/admin-routes.js";
+import { adminUserRoutes } from "./admin/users-routes.js";
 import { requireAdmin } from "./auth/middleware.js";
 
 const app = new Hono();
@@ -31,6 +32,9 @@ app.route("/", userAuthRoutes);
 
 // 管理者の認証（/admin/auth/login, /admin/auth/logout, /admin/auth/refresh, /admin/me）。
 app.route("/", adminAuthRoutes);
+
+// 管理者によるユーザー管理（/admin/users 配下: 一覧・詳細・セッション失効）。
+app.route("/", adminUserRoutes);
 
 // 共有スキーマで受信ボディを検証し、DB に保存する。
 app.post("/contact", async (c) => {
