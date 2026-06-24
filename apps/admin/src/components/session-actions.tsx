@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApiPost } from "../lib/client-api";
 import { toErrorMessage } from "../lib/error-message";
@@ -55,7 +55,12 @@ export function SessionActions({
 
   function revoke(target: "all" | number) {
     setPendingTarget(target);
-    submitRevoke(target);
+    // useActionState の dispatch を async アクションでプログラム的に呼ぶ場合は
+    // startTransition で包む必要がある（包まないと「outside of a transition」警告が出て
+    // isPending が正しく更新されない）。form の action/formAction 経由なら自動で包まれる。
+    startTransition(() => {
+      submitRevoke(target);
+    });
   }
 
   return (
