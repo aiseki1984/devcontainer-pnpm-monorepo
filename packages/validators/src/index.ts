@@ -10,6 +10,27 @@ import { z } from "zod";
 // 日本語メッセージになる（RHF のフィールドエラー表示・API の 400 レスポンス両方）。
 z.config(z.locales.ja());
 
+// 組み込み ja ロケールは一部に型名（"string" 等）が残り UI 文言として不自然なので、
+// フォームで頻出するケースだけ自然な日本語に上書きする。返さなかった issue は
+// ja ロケールにフォールバックする。
+z.config({
+  customError: (issue) => {
+    if (issue.code === "invalid_type") {
+      return "入力してください";
+    }
+    if (issue.code === "too_small" && issue.origin === "string") {
+      return `${issue.minimum}文字以上で入力してください`;
+    }
+    if (issue.code === "too_big" && issue.origin === "string") {
+      return `${issue.maximum}文字以内で入力してください`;
+    }
+    if (issue.code === "invalid_format" && issue.format === "email") {
+      return "メールアドレスの形式が正しくありません";
+    }
+    return undefined;
+  },
+});
+
 export const emailSchema = z.email();
 
 /** お問い合わせフォーム。web の入力検証と api の受信検証で共有する。 */
