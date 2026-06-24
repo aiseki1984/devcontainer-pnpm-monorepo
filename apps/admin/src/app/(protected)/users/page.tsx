@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { adminApiGet } from "../../../lib/server-api";
 import { Pagination } from "../../../components/pagination";
+import { formatDateTime } from "../../../lib/format";
 
 /** API（GET /admin/users）が返すユーザー1件分の形。db の UserListRow に対応。 */
 type User = {
@@ -95,7 +96,7 @@ export default async function UsersPage({
                   <div className="flex items-baseline justify-between gap-4">
                     <h2 className="font-medium">{user.name}</h2>
                     <time className="shrink-0 text-xs text-zinc-500">
-                      {new Date(user.createdAt).toLocaleString("ja-JP")}
+                      {formatDateTime(user.createdAt)}
                     </time>
                   </div>
                   <div className="flex items-center justify-between gap-4">

@@ -15,6 +15,7 @@ import { userAuthRoutes } from "./auth/user-routes.js";
 import { adminAuthRoutes } from "./auth/admin-routes.js";
 import { adminUserRoutes } from "./admin/users-routes.js";
 import { requireAdmin } from "./auth/middleware.js";
+import { paginatedBody, parseId } from "./lib/http.js";
 
 const app = new Hono();
 
@@ -67,18 +68,13 @@ app.get("/admin/contacts", requireAdmin, async (c) => {
     listContactsPage({ limit: perPage, offset: (page - 1) * perPage }),
     countContacts(),
   ]);
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  return c.json({
-    ok: true,
-    data: rows,
-    pagination: { page, perPage, total, totalPages },
-  });
+  return c.json(paginatedBody(rows, { page, perPage, total }));
 });
 
 // 管理者だけが、お問い合わせ 1 件の詳細を取得できる。
 app.get("/admin/contacts/:id", requireAdmin, async (c) => {
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id < 1) {
+  const id = parseId(c.req.param("id"));
+  if (id === null) {
     return c.json({ ok: false, error: "invalid id" }, 400);
   }
   const contact = await getContactById(id);

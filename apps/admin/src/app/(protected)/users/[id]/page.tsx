@@ -5,6 +5,7 @@ import {
   SessionActions,
   type Session,
 } from "../../../../components/session-actions";
+import { formatDateTime } from "../../../../lib/format";
 
 /** API（GET /admin/users/:id）が返すユーザー1件分の形。 */
 type User = {
@@ -57,8 +58,8 @@ export default async function UserDetailPage({
   // （client 側で toLocaleString すると SSR/hydration でタイムゾーンがズレる）。
   const sessions: Session[] = apiSessions.map((s) => ({
     id: s.id,
-    createdAtLabel: new Date(s.createdAt).toLocaleString("ja-JP"),
-    expiresAtLabel: new Date(s.expiresAt).toLocaleString("ja-JP"),
+    createdAtLabel: formatDateTime(s.createdAt),
+    expiresAtLabel: formatDateTime(s.expiresAt),
   }));
 
   return (
@@ -72,7 +73,7 @@ export default async function UserDetailPage({
               {user.name}
             </h1>
             <time className="shrink-0 text-xs text-zinc-500">
-              登録: {new Date(user.createdAt).toLocaleString("ja-JP")}
+              登録: {formatDateTime(user.createdAt)}
             </time>
           </div>
           <p className="text-sm text-zinc-500">{user.email}</p>
