@@ -26,6 +26,21 @@ packages/
 
 アーキテクチャやコーディング規約の詳細は [CLAUDE.md](CLAUDE.md) を参照。
 
+### フロントの実装パターン（あえて2通り見せています）
+
+参考用に、同じ関心事をあえて別方式で実装している箇所があります。どちらが正解という
+ものではなく、プロジェクトに合わせて寄せて使ってください。
+
+- **認証状態の保持**: web は React Context + `useState`（追加ライブラリ不要）、
+  admin は **zustand** ストア（`apps/admin/src/lib/auth-store.ts`）。どちらも `useAuth()`
+  の外形は同じ。トークンは両方とも HttpOnly Cookie のままで、保持するのは表示用の
+  プロフィールだけ。
+- **フォーム**: `react-hook-form` + `@hookform/resolvers` で、入力検証は
+  `packages/validators` の Zod スキーマを resolver に共有（フロント／バック単一ソース）。
+- **mutation**: フォームは RHF、セッション失効ボタンは React 標準の `useActionState`
+  （`apps/admin/src/components/session-actions.tsx`）。読み取りは当面 SSR + fetch で、
+  TanStack Query は未導入。
+
 ## セットアップ（クローン後）
 
 devcontainer で開く前提。`postCreateCommand` が依存関係を用意するので、

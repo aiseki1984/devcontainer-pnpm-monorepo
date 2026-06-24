@@ -16,6 +16,11 @@ type AuthContextValue = {
 /**
  * 認証状態は zustand ストア（useAuthStore）が持つので Provider は状態を持たない。
  * 役割は初回マウントで /admin/me を一度だけ取りにいくこと（旧 Context 実装の useEffect 相当）。
+ *
+ * boilerplate として **あえて** web 側（apps/web）とは別の方式を見せている:
+ * - admin（このアプリ）= zustand ストア（グローバル状態ライブラリを使うやり方）
+ * - web = React Context + useState（追加ライブラリ不要の標準的なやり方）
+ * どちらも useAuth() の外形は同じ。比較できるよう両方を残している（README 参照）。
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const load = useAuthStore((s) => s.load);

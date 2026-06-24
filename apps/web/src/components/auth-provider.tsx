@@ -35,6 +35,14 @@ async function fetchMe(): Promise<Me | null> {
   });
 }
 
+/**
+ * 認証状態を React Context で保持するパターン。
+ *
+ * boilerplate として **あえて** admin 側（apps/admin）とは別の方式を見せている:
+ * - web（このアプリ）= React Context + useState（追加ライブラリ不要の標準的なやり方）
+ * - admin = zustand ストア（グローバル状態ライブラリを使うやり方）
+ * どちらも useAuth() の外形は同じ。比較できるよう両方を残している（README 参照）。
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
