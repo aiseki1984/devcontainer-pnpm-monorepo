@@ -12,6 +12,9 @@
       "pnpmVersion": "11.5.3"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {},
+    // aws-cli: Garage（S3 互換）の CORS 設定など S3 API 操作に使う。
+    // devcontainer は garage と同じ Docker ネットワークにいるので garage:3900 へ直接届く。
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
 
