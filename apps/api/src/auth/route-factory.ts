@@ -17,6 +17,9 @@ type Account = {
   email: string;
   name: string;
   passwordHash: string;
+  // user アカウントのみ持つ（admin は列自体が無い）。公開形に出すかは
+  // 実行時にプロパティの有無で判定し、admin レスポンスには載せない。
+  avatarKey?: string | null;
 };
 
 type RefreshTokenRow = {
@@ -59,12 +62,17 @@ export function createAuthRoutes<
   const routes = new Hono<{ Variables: AuthVariables }>();
 
   function publicAccount(account: TAccount) {
-    return {
+    const base = {
       id: account.id,
       email: account.email,
       name: account.name,
       role: config.role,
     };
+    // avatarKey は user 行にだけ存在する列。プロパティの有無で判定し、
+    // admin レスポンスには余計な avatarKey: null を載せない。
+    return "avatarKey" in account
+      ? { ...base, avatarKey: account.avatarKey ?? null }
+      : base;
   }
 
   function sessionResponse(account: TAccount) {

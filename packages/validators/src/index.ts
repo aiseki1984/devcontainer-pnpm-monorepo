@@ -87,6 +87,61 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 /**
+ * アバター画像のアップロード制約。許可 MIME と最大バイト数の単一ソース。
+ * DB の text() カラムでは表現できないファイル制約なので validators が持つ。
+ */
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
+
+export const AVATAR_ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+export type AvatarMimeType = (typeof AVATAR_ALLOWED_MIME_TYPES)[number];
+
+/** MIME → 拡張子。オブジェクトキー生成に使う（storage 側のキー命名に渡す）。 */
+const AVATAR_EXT_BY_MIME: Record<AvatarMimeType, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+/** 許可済み MIME から拡張子を引く。 */
+export function avatarExtForMime(mime: AvatarMimeType): string {
+  return AVATAR_EXT_BY_MIME[mime];
+}
+
+/**
+ * presigned PUT URL の発行リクエスト。クライアントがアップロード前にファイルの
+ * MIME とサイズを申告し、API はこれを検証してから署名する。
+ *
+ * presigned PUT ではサイズをサーバ側で厳密強制できないため size は申告値の検証に留める。
+ * MIME は署名の ContentType に焼き込むことで実アップロード時に強制される。
+ */
+export const avatarPresignSchema = z.object({
+  contentType: z.enum(AVATAR_ALLOWED_MIME_TYPES, {
+    error: "対応していない画像形式です（JPEG / PNG / WebP）",
+  }),
+  size: z
+    .number()
+    .int()
+    .positive()
+    .max(AVATAR_MAX_BYTES, {
+      error: `画像サイズは ${AVATAR_MAX_BYTES / 1024 / 1024}MB 以内にしてください`,
+    }),
+});
+export type AvatarPresignInput = z.infer<typeof avatarPresignSchema>;
+
+/**
+ * プロフィール更新（PATCH /me）。今はアバターのオブジェクトキー保存のみ。
+ * キーが呼び出し元ユーザーのものかは API 側（認証済み id との突き合わせ）で検証する。
+ */
+export const updateMeSchema = z.object({
+  avatarKey: z.string().min(1).max(256),
+});
+export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+
+/**
  * ログイン。password は「空でない」だけ確認する。
  * 最小長などのルールは登録時の責務であり、ログインで強制すると無意味に拒否したり
  * ルールを露呈したりするため、ここでは緩くする（照合は保存ハッシュで行う）。

@@ -37,6 +37,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
+  // プロフィール画像のオブジェクトストレージ上のキー（{userId}/{uuid}.{ext}）。
+  // 未設定なら NULL。表示 URL ではなくキーだけを持ち、presigned GET は都度発行する。
+  avatarKey: text("avatar_key"),
   ...timestamps,
 });
 

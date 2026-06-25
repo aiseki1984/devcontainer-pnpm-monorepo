@@ -37,9 +37,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Garage: S3 互換オブジェクトストレージ（プロフィール画像などの保管先）。
+  # 公式イメージは distroless でシェルを持たないため healthcheck は付けない。
+  # storage は起動時依存ではなくリクエスト時依存なので app の depends_on にも入れない。
+  # 初期化（layout / bucket / key / CORS）は手動の 1 回きり。手順は README 参照。
+  garage:
+    image: dxflrs/garage:v2.3.0
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    ports:
+      # 3900 = S3 API。ホストのブラウザが presigned PUT/GET で直接叩くので必ず公開する。
+      - "3900:3900"
+      # 3903 = 管理 API（任意・デバッグ用）。
+      - "3903:3903"
+
   # mailpit: メールダミー（後で追加）
   # redis: BullMQ用（後で追加）
 
 volumes:
   postgres_data:
   pnpm_store:
+  garage_meta:
+  garage_data:
