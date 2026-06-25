@@ -61,16 +61,24 @@ export function createAuthRoutes<
 >(config: AuthRouteConfig<TAccount, TRefresh>) {
   const routes = new Hono<{ Variables: AuthVariables }>();
 
-  function publicAccount(account: TAccount) {
+  // publicAccount は passwordHash 等の秘匿列を見ないので、必要な列だけの構造的な型を受ける。
+  // これにより full な account 行だけでなく、PublicUser のような射影済みの形（PATCH /me が
+  // updateUserAvatar から受け取る形）も同じ整形関数に通せる。
+  function publicAccount(account: {
+    id: number;
+    email: string;
+    name: string;
+    avatarKey?: string | null;
+  }) {
     const base = {
       id: account.id,
       email: account.email,
       name: account.name,
       role: config.role,
     };
-    // avatarKey は user 行にだけ存在する列。プロパティの有無で判定し、
-    // admin レスポンスには余計な avatarKey: null を載せない。
-    return "avatarKey" in account
+    // avatarKey は user アカウントだけが持つ。role で分岐し admin レスポンスには載せない
+    // （プロパティの有無に依存すると、user 側クエリの射影変更で黙って欠落しうるため）。
+    return config.role === "user"
       ? { ...base, avatarKey: account.avatarKey ?? null }
       : base;
   }

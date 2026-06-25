@@ -9,8 +9,7 @@ import {
   AVATAR_ALLOWED_MIME_TYPES,
   AVATAR_MAX_BYTES,
 } from "@pnpm-test-workspace/validators";
-import { API_URL } from "../lib/api";
-import { apiPost } from "../lib/client-api";
+import { apiGet, apiPatch, apiPost } from "../lib/client-api";
 
 const MAX_MB = AVATAR_MAX_BYTES / 1024 / 1024;
 
@@ -87,12 +86,7 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
       }
 
       // 3) キーを保存
-      const patchRes = await fetch(`${API_URL}/me`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatarKey: key }),
-      });
+      const patchRes = await apiPatch("/me", { avatarKey: key });
       if (!patchRes.ok) {
         if (patchRes.status === 401) {
           router.push("/login");
@@ -103,9 +97,7 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
       }
 
       // 4) 表示用 URL を取り直す
-      const avatarRes = await fetch(`${API_URL}/me/avatar`, {
-        credentials: "include",
-      });
+      const avatarRes = await apiGet("/me/avatar");
       if (avatarRes.ok) {
         const { url } = (await avatarRes.json()) as AvatarUrlResponse;
         setCurrentUrl(url);

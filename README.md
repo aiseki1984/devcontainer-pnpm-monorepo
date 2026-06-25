@@ -73,63 +73,44 @@ pnpm --filter @pnpm-test-workspace/web dev   # 特定のパッケージだけ起
 
 プロフィール画像は S3 互換ストレージ **Garage** に保管する。`.devcontainer/compose.yml`
 の `garage` サービスとして起動するので、サービス追加後は **devcontainer を一度リビルド**
-してコンテナを作る。Garage はクラスタ layout・バケット・アクセスキー・CORS の初期化が
-**1 回だけ** 必要（データは volume に永続化されるので以降は不要）。
+してコンテナを作る。
 
-初期化は**ホスト側のシェル**（Docker が動いているマシン）から実行する。この devcontainer は
-固定のプロジェクト名で起動するため `docker compose` ではサービスを掴めないことがある。
-そこで `docker` でコンテナを名前フィルタで掴んでから操作する（公式イメージは distroless
-なのでバイナリ `/garage` を `docker exec` で直接叩く）。
+layout・バケット・アクセスキーは `garage server --single-node --default-bucket` と
+compose の `GARAGE_DEFAULT_*` 環境変数で **起動時に自動作成**される。固定の dev キーは
+`.env.example` の `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` と一致済みなので、
+`cp .env.example .env` していれば **アプリ側の追加設定は不要**。残る手動作業は **CORS** だけ。
+
+> 既に古い方式（手動 layout/bucket/key）で初期化済みのボリュームが残っている場合は、
+> 一度クリーンにする: `docker volume rm <project>_garage_meta <project>_garage_data`
+> （`<project>` は `docker volume ls` で確認。削除後にコンテナを再作成すると自動初期化が走る）。
+
+ブラウザが presigned PUT/GET で Garage を直接叩くため、web の origin からの `PUT`/`GET` を
+許可し、アップロード完了確認用に `ETag` を公開する **CORS** を一度だけ設定する。S3 API
+（`PutBucketCors`）経由で、ローカルに aws CLI が無くても済むよう `amazon/aws-cli` イメージを
+**garage と同じ Docker ネットワーク**に繋いで実行する（エンドポイントはサービス名 `garage:3900`）。
+以下は**ホスト側のシェル**（Docker が動いているマシン）から実行する。
 
 ```bash
-# garage コンテナ ID を変数に取る（以降のコマンドで使い回す）
+# garage コンテナと、それが属するネットワーク名を取得
 GARAGE=$(docker ps -qf name=garage)
-
-# 1) ノード ID を確認（HEALTHY と表示され、先頭列の ID をコピー）
-docker exec "$GARAGE" /garage status
-# 379e2eff4e64af8c
-
-# 2) 単一ノードに容量を割り当てて layout を確定（<NODE_ID> は上で得た ID）
-docker exec "$GARAGE" /garage layout assign -z dc1 -c 1G <NODE_ID>
-docker exec "$GARAGE" /garage layout apply --version 1
-
-# 3) バケットとアクセスキーを作成（.env の S3_BUCKET=avatars に合わせる）
-docker exec "$GARAGE" /garage bucket create avatars
-docker exec "$GARAGE" /garage key create web-app
-#   → 出力された "Key ID" と "Secret key" を .env の
-#     S3_ACCESS_KEY / S3_SECRET_KEY に貼り付ける
-
-# 4) キーにバケットの読み書き＋所有権（CORS 設定に必要）を付与
-docker exec "$GARAGE" /garage bucket allow --read --write --owner avatars --key web-app
-```
-
-最後に **CORS** を設定する。ブラウザが presigned PUT/GET で Garage を直接叩くため、
-web の origin からの `PUT`/`GET` を許可し、アップロード完了確認用に `ETag` を公開する。
-CORS の設定は S3 API（`PutBucketCors`）経由で、ローカルに aws CLI が無くても済むよう
-`amazon/aws-cli` イメージを **garage と同じ Docker ネットワーク**に繋いで実行する
-（エンドポイントはネットワーク内のサービス名 `garage:3900`）。
-
-```bash
-# garage が属するネットワーク名を取得
 GARAGE_NET=$(docker inspect -f \
   '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$GARAGE")
 
 CORS='{"CORSRules":[{"AllowedOrigins":["http://localhost:3000"],"AllowedMethods":["GET","PUT"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"]}]}'
 
+# 認証情報は compose の GARAGE_DEFAULT_* と同じ固定 dev キー
 docker run --rm --network "$GARAGE_NET" \
-  -e AWS_ACCESS_KEY_ID=<Key ID> \
-  -e AWS_SECRET_ACCESS_KEY=<Secret key> \
+  -e AWS_ACCESS_KEY_ID=GK0123456789abcdef01234567 \
+  -e AWS_SECRET_ACCESS_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   amazon/aws-cli --endpoint-url http://garage:3900 --region garage \
   s3api put-bucket-cors --bucket avatars --cors-configuration "$CORS"
-
 ```
 
 > 補足: presigned URL は **オフラインの署名計算**で、API コンテナから Garage への到達性は不要。
 > 署名に埋まる host（`S3_ENDPOINT` の `localhost:3900`）とブラウザのアクセス先が一致することが重要。
 > このため `S3_ENDPOINT` はコンテナ内向けの `garage:3900` ではなく **`localhost:3900`** にする。
 > （CORS 設定の aws-cli が `garage:3900` を使うのは別問題で、そちらは署名さえ整合すれば host は何でもよい。）
-> CI など完全に再現可能なキーが要る場合は `key create` の代わりに
-> `docker exec "$GARAGE" /garage key import --yes <ACCESS_KEY_ID> <SECRET_KEY>` で固定キーを投入してもよい。
+> 公式イメージは distroless なので、Garage の CLI を直接使う場合は `docker exec "$GARAGE" /garage <cmd>` で叩く。
 
 ## 環境変数について
 

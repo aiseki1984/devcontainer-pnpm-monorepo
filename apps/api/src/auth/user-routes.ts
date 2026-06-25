@@ -112,8 +112,8 @@ userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
 
 /**
  * アップロード完了後にアバターのオブジェクトキーを保存する。
- * クライアントが渡すキーは自分の名前空間（avatars/{自分の id}/）配下に限定し、
- * 他ユーザーのキー詐称を防ぐ（presign で発行したキーと同形であることの最低限の担保）。
+ * クライアントが渡すキーは自分の名前空間（{自分の id}/）配下かつ presign が発行する
+ * 形（{id}/{uuid}.{ext}）に限定し、他ユーザーのキー詐称や任意キーの保存を防ぐ。
  */
 userAuthRoutes.patch("/me", requireAuth, async (c) => {
   const userId = Number(c.get("user").sub);
@@ -130,23 +130,21 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
       400,
     );
   }
-  if (!parsed.data.avatarKey.startsWith(`${userId}/`)) {
+  // presign が発行する形（{userId}/{uuid}.{ext}）だけを受け付ける。プレフィックス
+  // 一致だけだと拡張子なしや任意サフィックスも通ってしまうため、キー全体を検証する。
+  // userId は数値なので正規表現へ埋めても安全。
+  const avatarKeyPattern = new RegExp(
+    `^${userId}/[0-9a-f-]+\\.(jpg|png|webp)$`,
+  );
+  if (!avatarKeyPattern.test(parsed.data.avatarKey)) {
     return c.json({ ok: false, error: "invalid avatar key" }, 400);
   }
   const updated = await updateUserAvatar(userId, parsed.data.avatarKey);
   if (!updated) {
     return c.json({ ok: false, error: "user not found" }, 404);
   }
-  return c.json({
-    ok: true,
-    user: {
-      id: updated.id,
-      email: updated.email,
-      name: updated.name,
-      avatarKey: updated.avatarKey,
-      role: "user" as const,
-    },
-  });
+  // 公開形の整形は route-factory の publicAccount に集約（/me・login と同じ形）。
+  return c.json({ ok: true, user: userAuth.publicAccount(updated) });
 });
 
 /**

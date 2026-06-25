@@ -15,13 +15,16 @@ type AvatarUrl = { url: string | null };
 
 export default async function MyPage() {
   // 認証は proxy（期限切れ→refresh）と userApiGet（401→/login）が担う。
-  const res = await userApiGet("/me");
+  // /me と /me/avatar は互いに独立なので直列待ちせず並行で取得する。
+  const [res, avatarRes] = await Promise.all([
+    userApiGet("/me"),
+    userApiGet("/me/avatar"),
+  ]);
   if (!res.ok) redirect("/login");
 
   const { user } = (await res.json()) as Me;
 
-  // 表示用のアバター URL（presigned GET）。未設定なら null。
-  const avatarRes = await userApiGet("/me/avatar");
+  // 表示用のアバター URL（presigned GET）。未設定・失敗時は null。
   const { url: avatarUrl } = avatarRes.ok
     ? ((await avatarRes.json()) as AvatarUrl)
     : { url: null };
