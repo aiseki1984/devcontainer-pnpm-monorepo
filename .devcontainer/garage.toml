@@ -1,0 +1,30 @@
+# Garage（S3 互換オブジェクトストレージ）の開発用設定。
+# 本番ではここの secret 類を必ずランダム値に差し替える。dev では固定で構わない
+# （devcontainer の中だけで完結し、外部公開しないため）。
+#
+# 値の生成例:
+#   rpc_secret  : openssl rand -hex 32   （32 バイト = 64 hex 必須）
+#   admin_token : openssl rand -base64 32
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+# 単一ノードなので複製は 1。
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[s3_api]
+# presigned URL の署名に使うリージョン。S3_REGION と一致させる。
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+# 注: [s3_web]（静的ウェブホスティング）は今回使わない。v2 系では
+# このセクションを書くと root_domain が必須になり、未指定だと起動が失敗する。
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "dev-admin-token"

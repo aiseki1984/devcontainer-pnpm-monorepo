@@ -37,9 +37,37 @@ services:
       timeout: 5s
       retries: 5
 
+  # Garage: S3 互換オブジェクトストレージ（プロフィール画像などの保管先）。
+  # 公式イメージは distroless でシェルを持たないため healthcheck は付けない。
+  # storage は起動時依存ではなくリクエスト時依存なので app の depends_on にも入れない。
+  # layout / bucket / key は起動フラグで自動構成されるので、手動初期化は CORS だけ。手順は README 参照。
+  garage:
+    image: dxflrs/garage:v2.3.0
+    # --single-node: 単一ノードの layout を自動構成（手動の layout assign/apply 不要）。
+    # --default-bucket: 下の GARAGE_DEFAULT_* から既定バケットとアクセスキーを起動時に自動作成。
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      # dev 専用の固定キー。本番では使わない（devcontainer 内で完結し外部公開しない）。
+      # ルート .env の S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET と必ず一致させること。
+      # access key は Garage 形式（GK + 24 hex）、secret は 32 バイト（64 hex）。
+      GARAGE_DEFAULT_ACCESS_KEY: GK0123456789abcdef01234567
+      GARAGE_DEFAULT_SECRET_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      GARAGE_DEFAULT_BUCKET: avatars
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    ports:
+      # 3900 = S3 API。ホストのブラウザが presigned PUT/GET で直接叩くので必ず公開する。
+      - "3900:3900"
+      # 3903 = 管理 API（任意・デバッグ用）。
+      - "3903:3903"
+
   # mailpit: メールダミー（後で追加）
   # redis: BullMQ用（後で追加）
 
 volumes:
   postgres_data:
   pnpm_store:
+  garage_meta:
+  garage_data:

@@ -9,7 +9,10 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
 /** 外部に返してよいユーザーの公開形。password_hash 等の秘匿列を含めない。 */
-export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
+export type PublicUser = Pick<
+  User,
+  "id" | "email" | "name" | "avatarKey" | "createdAt"
+>;
 
 /**
  * 一覧表示用の安全なユーザー形。
@@ -24,6 +27,7 @@ const publicUserColumns = {
   id: users.id,
   email: users.email,
   name: users.name,
+  avatarKey: users.avatarKey,
   createdAt: users.createdAt,
 } as const;
 
@@ -58,6 +62,22 @@ export async function getUserPublicById(
 export async function createUser(input: NewUser): Promise<User> {
   const [created] = await db.insert(users).values(input).returning();
   return created;
+}
+
+/**
+ * ユーザーのアバターのオブジェクトキーを更新し、更新後の公開形を返す。
+ * 存在しなければ null。秘匿列を返さないよう publicUserColumns で射影する。
+ */
+export async function updateUserAvatar(
+  userId: number,
+  avatarKey: string,
+): Promise<PublicUser | null> {
+  const [updated] = await db
+    .update(users)
+    .set({ avatarKey })
+    .where(eq(users.id, userId))
+    .returning(publicUserColumns);
+  return updated ?? null;
 }
 
 /**

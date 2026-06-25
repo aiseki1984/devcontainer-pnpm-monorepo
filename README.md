@@ -69,6 +69,49 @@ pnpm --filter @pnpm-test-workspace/web dev   # 特定のパッケージだけ起
 よく使うコマンド: `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test`
 （いずれも Turbo 経由でワークスペース全体）。
 
+## オブジェクトストレージ（Garage）の初期化
+
+プロフィール画像は S3 互換ストレージ **Garage** に保管する。`.devcontainer/compose.yml`
+の `garage` サービスとして起動するので、サービス追加後は **devcontainer を一度リビルド**
+してコンテナを作る。
+
+layout・バケット・アクセスキーは `garage server --single-node --default-bucket` と
+compose の `GARAGE_DEFAULT_*` 環境変数で **起動時に自動作成**される。固定の dev キーは
+`.env.example` の `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` と一致済みなので、
+`cp .env.example .env` していれば **アプリ側の追加設定は不要**。残る手動作業は **CORS** だけ。
+
+> 既に古い方式（手動 layout/bucket/key）で初期化済みのボリュームが残っている場合は、
+> 一度クリーンにする: `docker volume rm <project>_garage_meta <project>_garage_data`
+> （`<project>` は `docker volume ls` で確認。削除後にコンテナを再作成すると自動初期化が走る）。
+
+ブラウザが presigned PUT/GET で Garage を直接叩くため、web の origin からの `PUT`/`GET` を
+許可し、アップロード完了確認用に `ETag` を公開する **CORS** を一度だけ設定する。S3 API
+（`PutBucketCors`）経由で、ローカルに aws CLI が無くても済むよう `amazon/aws-cli` イメージを
+**garage と同じ Docker ネットワーク**に繋いで実行する（エンドポイントはサービス名 `garage:3900`）。
+以下は**ホスト側のシェル**（Docker が動いているマシン）から実行する。
+
+```bash
+# garage コンテナと、それが属するネットワーク名を取得
+GARAGE=$(docker ps -qf name=garage)
+GARAGE_NET=$(docker inspect -f \
+  '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$GARAGE")
+
+CORS='{"CORSRules":[{"AllowedOrigins":["http://localhost:3000"],"AllowedMethods":["GET","PUT"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"]}]}'
+
+# 認証情報は compose の GARAGE_DEFAULT_* と同じ固定 dev キー
+docker run --rm --network "$GARAGE_NET" \
+  -e AWS_ACCESS_KEY_ID=GK0123456789abcdef01234567 \
+  -e AWS_SECRET_ACCESS_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  amazon/aws-cli --endpoint-url http://garage:3900 --region garage \
+  s3api put-bucket-cors --bucket avatars --cors-configuration "$CORS"
+```
+
+> 補足: presigned URL は **オフラインの署名計算**で、API コンテナから Garage への到達性は不要。
+> 署名に埋まる host（`S3_ENDPOINT` の `localhost:3900`）とブラウザのアクセス先が一致することが重要。
+> このため `S3_ENDPOINT` はコンテナ内向けの `garage:3900` ではなく **`localhost:3900`** にする。
+> （CORS 設定の aws-cli が `garage:3900` を使うのは別問題で、そちらは署名さえ整合すれば host は何でもよい。）
+> 公式イメージは distroless なので、Garage の CLI を直接使う場合は `docker exec "$GARAGE" /garage <cmd>` で叩く。
+
 ## 環境変数について
 
 - 実値はリポジトリルートの **`.env`** に置く（`.env` は gitignore 済み。`.env.example` がテンプレート）。

@@ -17,6 +17,9 @@ type Account = {
   email: string;
   name: string;
   passwordHash: string;
+  // user アカウントのみ持つ（admin は列自体が無い）。公開形に出すかは
+  // 実行時にプロパティの有無で判定し、admin レスポンスには載せない。
+  avatarKey?: string | null;
 };
 
 type RefreshTokenRow = {
@@ -58,13 +61,26 @@ export function createAuthRoutes<
 >(config: AuthRouteConfig<TAccount, TRefresh>) {
   const routes = new Hono<{ Variables: AuthVariables }>();
 
-  function publicAccount(account: TAccount) {
-    return {
+  // publicAccount は passwordHash 等の秘匿列を見ないので、必要な列だけの構造的な型を受ける。
+  // これにより full な account 行だけでなく、PublicUser のような射影済みの形（PATCH /me が
+  // updateUserAvatar から受け取る形）も同じ整形関数に通せる。
+  function publicAccount(account: {
+    id: number;
+    email: string;
+    name: string;
+    avatarKey?: string | null;
+  }) {
+    const base = {
       id: account.id,
       email: account.email,
       name: account.name,
       role: config.role,
     };
+    // avatarKey は user アカウントだけが持つ。role で分岐し admin レスポンスには載せない
+    // （プロパティの有無に依存すると、user 側クエリの射影変更で黙って欠落しうるため）。
+    return config.role === "user"
+      ? { ...base, avatarKey: account.avatarKey ?? null }
+      : base;
   }
 
   function sessionResponse(account: TAccount) {
