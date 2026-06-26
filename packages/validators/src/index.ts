@@ -87,28 +87,27 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 /**
- * アバター画像のアップロード制約。許可 MIME と最大バイト数の単一ソース。
- * DB の text() カラムでは表現できないファイル制約なので validators が持つ。
+ * 画像ファイルの共通制約・ユーティリティ（avatar / gallery などで共有）。
+ * 許可 MIME と拡張子マッピングの単一ソース。DB の text() では表現できないファイル制約なので
+ * validators が持つ。サイズ上限は用途ごとに別（avatar は小さめ、gallery は大きめ）。
  */
-export const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
-
-export const AVATAR_ALLOWED_MIME_TYPES = [
+export const IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
 ] as const;
-export type AvatarMimeType = (typeof AVATAR_ALLOWED_MIME_TYPES)[number];
+export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
 
 /** MIME → 拡張子。オブジェクトキー生成に使う（storage 側のキー命名に渡す）。 */
-const AVATAR_EXT_BY_MIME: Record<AvatarMimeType, string> = {
+const IMAGE_EXT_BY_MIME: Record<ImageMimeType, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
 };
 
-/** 許可済み MIME から拡張子を引く。 */
-export function avatarExtForMime(mime: AvatarMimeType): string {
-  return AVATAR_EXT_BY_MIME[mime];
+/** 許可済み画像 MIME から拡張子を引く。 */
+export function imageExtForMime(mime: ImageMimeType): string {
+  return IMAGE_EXT_BY_MIME[mime];
 }
 
 /**
@@ -118,7 +117,7 @@ export function avatarExtForMime(mime: AvatarMimeType): string {
  * WebP は RIFF コンテナ判定に 12 バイト要るので、呼び出し側は 12 バイト以上渡すこと。
  * 判定不能（許可外）なら null。
  */
-export function sniffAvatarImageMime(head: Uint8Array): AvatarMimeType | null {
+export function sniffImageMime(head: Uint8Array): ImageMimeType | null {
   // JPEG: FF D8 FF
   if (
     head.length >= 3 &&
@@ -159,13 +158,17 @@ export function sniffAvatarImageMime(head: Uint8Array): AvatarMimeType | null {
   return null;
 }
 
+/** アバター画像（1枚・公開）の制約。 */
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
+export const AVATAR_ALLOWED_MIME_TYPES = IMAGE_MIME_TYPES;
+
 /**
  * presigned POST 発行リクエスト。クライアントがアップロード前にファイルの MIME と
  * サイズを申告し、API はこれを検証してから署名する。
  *
  * サイズの **実強制** は presigned POST の `content-length-range` 条件が担う（ここでの
  * size は早期に弾くための UX 用検証）。MIME は署名ポリシーの `Content-Type` 固定に加え、
- * 保存前の magic number 検証（{@link sniffAvatarImageMime}）で実体まで確認する。
+ * 保存前の magic number 検証（{@link sniffImageMime}）で実体まで確認する。
  */
 export const avatarPresignSchema = z.object({
   contentType: z.enum(AVATAR_ALLOWED_MIME_TYPES, {
@@ -189,6 +192,45 @@ export const updateMeSchema = z.object({
   avatarKey: z.string().min(1).max(256),
 });
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+
+/**
+ * マイギャラリー画像（複数・非公開）の制約。avatar より大きめを許可する。
+ * 当面は画像のみ（PDF 等を許すなら IMAGE_MIME_TYPES とは別の許可リストに拡張する）。
+ */
+export const GALLERY_MAX_BYTES = 5 * 1024 * 1024; // 5 MiB
+export const GALLERY_ALLOWED_MIME_TYPES = IMAGE_MIME_TYPES;
+/** ファイル名（任意・表示/ダウンロード用メタ）の最大長。 */
+export const GALLERY_ORIGINAL_NAME_MAX = 255;
+
+/** ギャラリー画像の presigned POST 発行リクエスト（avatar と同形）。 */
+export const galleryPresignSchema = z.object({
+  contentType: z.enum(GALLERY_ALLOWED_MIME_TYPES, {
+    error: "対応していない画像形式です（JPEG / PNG / WebP）",
+  }),
+  size: z
+    .number()
+    .int()
+    .positive()
+    .max(GALLERY_MAX_BYTES, {
+      error: `画像サイズは ${GALLERY_MAX_BYTES / 1024 / 1024}MB 以内にしてください`,
+    }),
+});
+export type GalleryPresignInput = z.infer<typeof galleryPresignSchema>;
+
+/**
+ * アップロード完了後のギャラリー画像メタ保存リクエスト。
+ * objectKey が呼び出し元ユーザーの名前空間かは API 側でキー検証する。
+ * contentType / size は表示用メタ（実体は API 側の magic number 検証で担保）。
+ */
+export const gallerySaveSchema = z.object({
+  objectKey: z.string().min(1).max(256),
+  contentType: z.enum(GALLERY_ALLOWED_MIME_TYPES, {
+    error: "対応していない画像形式です（JPEG / PNG / WebP）",
+  }),
+  size: z.number().int().positive().max(GALLERY_MAX_BYTES),
+  originalName: z.string().min(1).max(GALLERY_ORIGINAL_NAME_MAX).optional(),
+});
+export type GallerySaveInput = z.infer<typeof gallerySaveSchema>;
 
 /**
  * ログイン。password は「空でない」だけ確認する。

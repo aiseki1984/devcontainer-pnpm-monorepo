@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { contactSchema, safeNextPath, sniffAvatarImageMime } from "./index.js";
+import { contactSchema, safeNextPath, sniffImageMime } from "./index.js";
 
-describe("sniffAvatarImageMime", () => {
+describe("sniffImageMime", () => {
   it("JPEG の magic number を判定する", () => {
-    expect(sniffAvatarImageMime(new Uint8Array([0xff, 0xd8, 0xff, 0x00]))).toBe(
+    expect(sniffImageMime(new Uint8Array([0xff, 0xd8, 0xff, 0x00]))).toBe(
       "image/jpeg",
     );
   });
 
   it("PNG の magic number を判定する", () => {
     expect(
-      sniffAvatarImageMime(
+      sniffImageMime(
         new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       ),
     ).toBe("image/png");
@@ -20,18 +20,18 @@ describe("sniffAvatarImageMime", () => {
     const head = new Uint8Array([
       0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
     ]);
-    expect(sniffAvatarImageMime(head)).toBe("image/webp");
+    expect(sniffImageMime(head)).toBe("image/webp");
   });
 
   it("画像でないバイト列（HTML 等）は null", () => {
     // "<html>..." を名乗る非画像
     const head = new Uint8Array([0x3c, 0x68, 0x74, 0x6d, 0x6c, 0x3e]);
-    expect(sniffAvatarImageMime(head)).toBeNull();
+    expect(sniffImageMime(head)).toBeNull();
   });
 
   it("バイト不足でも誤判定しない", () => {
-    expect(sniffAvatarImageMime(new Uint8Array([0xff, 0xd8]))).toBeNull();
-    expect(sniffAvatarImageMime(new Uint8Array(0))).toBeNull();
+    expect(sniffImageMime(new Uint8Array([0xff, 0xd8]))).toBeNull();
+    expect(sniffImageMime(new Uint8Array(0))).toBeNull();
   });
 });
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { userApiGet } from "../../lib/server-api";
 import { AvatarUploader } from "../../components/avatar-uploader";
@@ -47,6 +48,12 @@ export default async function MyPage() {
             <dd>{user.role}</dd>
           </div>
         </dl>
+        <Link
+          href="/mypage/gallery"
+          className="text-sm text-foreground underline underline-offset-4"
+        >
+          マイギャラリー →
+        </Link>
         <p className="text-sm text-zinc-500">
           ログアウトは右上のメニューから。
         </p>

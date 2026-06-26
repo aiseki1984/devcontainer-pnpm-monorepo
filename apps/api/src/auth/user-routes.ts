@@ -1,18 +1,24 @@
 import { Hono } from "hono";
 import {
   AVATAR_MAX_BYTES,
-  avatarExtForMime,
   avatarPresignSchema,
+  GALLERY_MAX_BYTES,
+  galleryPresignSchema,
+  gallerySaveSchema,
+  imageExtForMime,
   registerSchema,
-  sniffAvatarImageMime,
+  sniffImageMime,
   updateMeSchema,
 } from "@pnpm-test-workspace/validators";
 import {
+  createGalleryImage,
   createUser,
   createUserRefreshToken,
+  deleteGalleryImage,
   findUserRefreshTokenByHash,
   getUserByEmail,
   getUserById,
+  listGalleryImagesByUser,
   revokeAllUserRefreshTokens,
   revokeUserRefreshToken,
   updateUserAvatar,
@@ -20,7 +26,9 @@ import {
 import {
   buildObjectKey,
   deleteObject,
+  getPrivateBucket,
   getPublicBucket,
+  presignDownload,
   presignUpload,
   readObjectHead,
 } from "@pnpm-test-workspace/storage";
@@ -107,7 +115,7 @@ userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
       400,
     );
   }
-  const ext = avatarExtForMime(parsed.data.contentType);
+  const ext = imageExtForMime(parsed.data.contentType);
   const key = buildObjectKey("avatars", userId, ext);
   const { url, fields } = await presignUpload({
     bucket: getPublicBucket(),
@@ -169,8 +177,8 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
     // オブジェクトが存在しない（アップロード未完了など）。
     return c.json({ ok: false, error: "avatar object not found" }, 400);
   }
-  const sniffed = sniffAvatarImageMime(head);
-  if (!sniffed || avatarExtForMime(sniffed) !== keyExt) {
+  const sniffed = sniffImageMime(head);
+  if (!sniffed || imageExtForMime(sniffed) !== keyExt) {
     // 掃除はベストエフォート。削除が失敗してもオブジェクトが孤児として残るだけなので、
     // 本来返すべき検証エラー(400)を握りつぶして 500 に化けさせない。
     try {
@@ -198,6 +206,135 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
   // avatar は公開バケット配信なので publicAccount が avatarUrl（公開固定 URL）も返す。
   // 専用の GET /me/avatar（旧: presigned GET）は不要になったので廃止。
   return c.json({ ok: true, user: userAuth.publicAccount(updated) });
+});
+
+/**
+ * マイギャラリー（非公開）。1 ユーザーが複数の私的画像を持つ。avatar（公開）と違い、
+ * 表示は非公開バケットの presigned GET URL を都度発行する。すべて requireAuth + 本人スコープ。
+ */
+
+/** アップロード用 presigned POST を発行する（非公開バケット）。 */
+userAuthRoutes.post("/me/gallery/presign", requireAuth, async (c) => {
+  const userId = Number(c.get("user").sub);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid JSON" }, 400);
+  }
+  const parsed = galleryPresignSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { ok: false, errors: parsed.error.flatten().fieldErrors },
+      400,
+    );
+  }
+  const ext = imageExtForMime(parsed.data.contentType);
+  const key = buildObjectKey("gallery", userId, ext);
+  const { url, fields } = await presignUpload({
+    bucket: getPrivateBucket(),
+    key,
+    contentType: parsed.data.contentType,
+    maxBytes: GALLERY_MAX_BYTES,
+  });
+  return c.json({ ok: true, url, fields, key });
+});
+
+/**
+ * アップロード完了後にメタを保存する。キーは自分の名前空間（gallery/{自分の id}/）配下の
+ * presign 発行形に限定し、内容を magic number 検証してから DB 行を作る。
+ */
+userAuthRoutes.post("/me/gallery", requireAuth, async (c) => {
+  const userId = Number(c.get("user").sub);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid JSON" }, 400);
+  }
+  const parsed = gallerySaveSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { ok: false, errors: parsed.error.flatten().fieldErrors },
+      400,
+    );
+  }
+  const bucket = getPrivateBucket();
+  // presign が発行する形（gallery/{userId}/{uuid}.{ext}）だけを受け付ける。
+  const keyPattern = new RegExp(
+    `^gallery/${userId}/[0-9a-f-]+\\.(jpg|png|webp)$`,
+  );
+  const keyMatch = keyPattern.exec(parsed.data.objectKey);
+  if (!keyMatch) {
+    return c.json({ ok: false, error: "invalid object key" }, 400);
+  }
+  const key = parsed.data.objectKey;
+  const keyExt = keyMatch[1];
+
+  // 内容（magic number）検証。不一致なら不正オブジェクトを掃除して 400。
+  let head: Uint8Array;
+  try {
+    head = await readObjectHead({ bucket, key });
+  } catch {
+    return c.json({ ok: false, error: "object not found" }, 400);
+  }
+  const sniffed = sniffImageMime(head);
+  if (!sniffed || imageExtForMime(sniffed) !== keyExt) {
+    try {
+      await deleteObject({ bucket, key });
+    } catch {
+      // 孤児は許容。
+    }
+    return c.json({ ok: false, error: "invalid image content" }, 400);
+  }
+
+  const { objectKey, ...rest } = await createGalleryImage({
+    userId,
+    objectKey: key,
+    contentType: parsed.data.contentType,
+    sizeBytes: parsed.data.size,
+    originalName: parsed.data.originalName ?? null,
+  });
+  const url = await presignDownload({ bucket, key: objectKey });
+  return c.json({ ok: true, image: { ...rest, url } }, 201);
+});
+
+/** 自分のギャラリー一覧。各オブジェクトの presigned GET URL を一括発行して返す。 */
+userAuthRoutes.get("/me/gallery", requireAuth, async (c) => {
+  const userId = Number(c.get("user").sub);
+  const bucket = getPrivateBucket();
+  const rows = await listGalleryImagesByUser(userId);
+  // objectKey は内部キーなので公開形に出さず、presigned URL に変換して返す。
+  const images = await Promise.all(
+    rows.map(async ({ objectKey, ...rest }) => ({
+      ...rest,
+      url: await presignDownload({ bucket, key: objectKey }),
+    })),
+  );
+  return c.json({ ok: true, images });
+});
+
+/**
+ * 自分のギャラリー画像を 1 件削除する。所有権は DB 側の id + user_id 条件で担保し、
+ * 他人の id を指定しても 404（存在も漏らさない）。DB 行を消してからオブジェクトを掃除する。
+ */
+userAuthRoutes.delete("/me/gallery/:id", requireAuth, async (c) => {
+  const userId = Number(c.get("user").sub);
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ ok: false, error: "invalid id" }, 400);
+  }
+  const objectKey = await deleteGalleryImage(id, userId);
+  if (!objectKey) {
+    return c.json({ ok: false, error: "not found" }, 404);
+  }
+  // DB 行は消えた。オブジェクト削除はベストエフォート（失敗しても孤児が残るだけ）。
+  try {
+    await deleteObject({ bucket: getPrivateBucket(), key: objectKey });
+  } catch {
+    // 孤児は許容。
+  }
+  return c.json({ ok: true });
 });
 
 userAuthRoutes.route("/", userAuth.routes);
