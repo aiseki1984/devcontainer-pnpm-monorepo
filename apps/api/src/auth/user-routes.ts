@@ -161,7 +161,13 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
   }
   const sniffed = sniffAvatarImageMime(head);
   if (!sniffed || avatarExtForMime(sniffed) !== keyExt) {
-    await deleteAvatarObject(key);
+    // 掃除はベストエフォート。削除が失敗してもオブジェクトが孤児として残るだけなので、
+    // 本来返すべき検証エラー(400)を握りつぶして 500 に化けさせない。
+    try {
+      await deleteAvatarObject(key);
+    } catch {
+      // 孤児は許容（アバター1枚の boilerplate では掃除を省略する方針と整合）。
+    }
     return c.json({ ok: false, error: "invalid avatar content" }, 400);
   }
 

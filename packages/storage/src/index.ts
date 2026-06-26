@@ -59,7 +59,8 @@ export function presignAvatarUpload(params: {
 
 /**
  * オブジェクト先頭の数バイトを取得する（magic number 検証用）。
- * Range 取得なので全体はダウンロードしない。オブジェクトが存在しなければ throw する。
+ * Range 取得なので全体はダウンロードしない。オブジェクトが存在しなければ（NoSuchKey 等で）
+ * throw する。存在するが本文が空の場合は空の Uint8Array を返す（呼び出し側で内容不正として扱える）。
  */
 export async function readAvatarHead(
   key: string,

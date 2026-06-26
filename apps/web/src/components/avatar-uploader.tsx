@@ -90,12 +90,14 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;
     }
-    // 許可形式のときだけプレビュー（非対応は <img> が壊れるだけなので出さない。検証は RHF が表示）。
-    const next =
+    // 許可形式かつサイズ内のときだけプレビュー。アップロードできないファイル
+    // （非対応形式・サイズ超過）でプレビューを出すと「準備OK」に見えて紛らわしいので、
+    // RHF の検証と同じ条件で弾く（検証エラー自体の表示は RHF に任せる）。
+    const valid =
       file &&
-      (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)
-        ? URL.createObjectURL(file)
-        : null;
+      (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type) &&
+      file.size <= AVATAR_MAX_BYTES;
+    const next = valid ? URL.createObjectURL(file) : null;
     objectUrlRef.current = next;
     setPreviewUrl(next);
   };
