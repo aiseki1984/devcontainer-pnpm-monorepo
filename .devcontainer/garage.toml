@@ -22,8 +22,16 @@ rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
 s3_region = "garage"
 api_bind_addr = "[::]:3900"
 
-# 注: [s3_web]（静的ウェブホスティング）は今回使わない。v2 系では
-# このセクションを書くと root_domain が必須になり、未指定だと起動が失敗する。
+[s3_web]
+# 公開バケットの匿名 read 用エンドポイント。Garage は S3 API(:3900) では匿名 GET を
+# サポートしない（公式 issue #263）ため、公開アセット（avatar/logo）はこの website
+# エンドポイント経由で配信する。root_domain は vhost のサフィックスで、bucket
+# `media-public` は `media-public.web.localhost:3902` で配信される
+# （`*.localhost` は主要ブラウザが 127.0.0.1 に解決するので hosts 編集は不要）。
+# 公開するには別途 `garage bucket website --allow media-public` が必要（README 参照）。
+bind_addr = "[::]:3902"
+root_domain = ".web.localhost"
+index = "index.html"
 
 [admin]
 api_bind_addr = "[::]:3903"

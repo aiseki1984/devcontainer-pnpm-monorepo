@@ -9,7 +9,7 @@ import {
   AVATAR_ALLOWED_MIME_TYPES,
   AVATAR_MAX_BYTES,
 } from "@pnpm-test-workspace/validators";
-import { apiGet, apiPatch, apiPost } from "../lib/client-api";
+import { apiPatch, apiPost } from "../lib/client-api";
 
 const MAX_MB = AVATAR_MAX_BYTES / 1024 / 1024;
 
@@ -39,7 +39,7 @@ type PresignResponse = {
   fields: Record<string, string>;
   key: string;
 };
-type AvatarUrlResponse = { url: string | null };
+type PatchMeResponse = { user: { avatarUrl: string | null } };
 
 /**
  * プロフィール画像のアップロード（方式 A: presigned POST）。
@@ -48,7 +48,7 @@ type AvatarUrlResponse = { url: string | null };
  * 2. ブラウザから Garage へ直接 multipart POST（バイトは API を経由しない）。
  *    サイズ上限は POST ポリシーの content-length-range が実強制する。
  * 3. PATCH /me でキーを保存（サーバが magic number で内容を検証）
- * 4. GET /me/avatar で表示用 presigned GET URL を取り直して反映
+ * 4. PATCH のレスポンスに含まれる公開 avatar URL で表示を更新（avatar は公開バケット配信）
  */
 export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
   const router = useRouter();
@@ -135,7 +135,7 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         return;
       }
 
-      // 3) キーを保存
+      // 3) キーを保存。レスポンスに公開 avatar URL（avatarUrl）が含まれる。
       const patchRes = await apiPatch("/me", { avatarKey: key });
       if (!patchRes.ok) {
         if (patchRes.status === 401) {
@@ -146,15 +146,13 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         return;
       }
 
-      // 4) 表示用 URL を取り直し、フォームを初期化してプレビュー表示を解除する
-      //    （blob 自体は次の選択／アンマウント時に revoke される）。
-      const avatarRes = await apiGet("/me/avatar");
-      if (avatarRes.ok) {
-        const { url } = (await avatarRes.json()) as AvatarUrlResponse;
-        setCurrentUrl(url);
-        reset();
-        setPreviewUrl(null);
-      }
+      // 4) 保存済みの公開 URL に表示を差し替え、フォームを初期化してプレビュー表示を解除する
+      //    （blob 自体は次の選択／アンマウント時に revoke される）。avatar は公開固定 URL
+      //    だが、キーが毎回ランダムなので URL も変わりブラウザキャッシュは自然に更新される。
+      const { user } = (await patchRes.json()) as PatchMeResponse;
+      setCurrentUrl(user.avatarUrl);
+      reset();
+      setPreviewUrl(null);
     } catch {
       setError("root", { message: "通信に失敗しました" });
     }

@@ -48,18 +48,22 @@ services:
     command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
       # dev 専用の固定キー。本番では使わない（devcontainer 内で完結し外部公開しない）。
-      # ルート .env の S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET と必ず一致させること。
+      # ルート .env の S3_ACCESS_KEY / S3_SECRET_KEY / S3_PUBLIC_BUCKET と必ず一致させること。
       # access key は Garage 形式（GK + 24 hex）、secret は 32 バイト（64 hex）。
       GARAGE_DEFAULT_ACCESS_KEY: GK0123456789abcdef01234567
       GARAGE_DEFAULT_SECRET_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      GARAGE_DEFAULT_BUCKET: avatars
+      # 起動時に自動作成されるのは公開バケット（avatar/logo）。website での匿名公開と
+      # CORS は手動（README 参照）。非公開バケット media-private はギャラリー機能で追加する。
+      GARAGE_DEFAULT_BUCKET: media-public
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
       - garage_meta:/var/lib/garage/meta
       - garage_data:/var/lib/garage/data
     ports:
-      # 3900 = S3 API。ホストのブラウザが presigned PUT/GET で直接叩くので必ず公開する。
+      # 3900 = S3 API。ホストのブラウザが presigned POST で直接アップロードするので公開する。
       - "3900:3900"
+      # 3902 = website エンドポイント。公開バケットの匿名 read 配信に使う（avatar/logo 表示）。
+      - "3902:3902"
       # 3903 = 管理 API（任意・デバッグ用）。
       - "3903:3903"
 
