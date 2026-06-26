@@ -145,7 +145,9 @@ RUN s3api put-bucket-cors --bucket media-public --cors-configuration "$CORS"
 ```bash
 GARAGE=$(docker ps -qf name=garage)
 docker exec "$GARAGE" /garage bucket create media-private
-docker exec "$GARAGE" /garage bucket allow --read --write \
+# RW だけでなく Owner も付ける。PutBucketCors 等のバケット設定操作は Owner 権限が要る
+# （RW はオブジェクト操作のみ）。media-public は --default-bucket で RWO 付きで作られる。
+docker exec "$GARAGE" /garage bucket allow --read --write --owner \
   media-private --key GK0123456789abcdef01234567
 ```
 
