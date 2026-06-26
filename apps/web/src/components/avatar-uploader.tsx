@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -53,14 +53,52 @@ type AvatarUrlResponse = { url: string | null };
 export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
   const router = useRouter();
   const [currentUrl, setCurrentUrl] = useState<string | null>(initialUrl);
+  // 選択直後のローカルプレビュー。アップロードはせず blob URL を表示するだけ。
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // 現在の blob URL を保持し revoke するための ref。参照はイベントハンドラと
+  // アンマウント時の cleanup でのみ行い、render 中には触らない。
+  const objectUrlRef = useRef<string | null>(null);
   const {
     register,
     handleSubmit,
+    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<AvatarFormValues>({
     resolver: zodResolver(avatarFormSchema),
   });
+
+  // アンマウント時に未解放の blob URL を片付ける。
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
+
+  // register の onChange を奪わずに（RHF の検証は残す）プレビュー生成を差し込む。
+  const fileField = register("file");
+
+  // 表示はプレビュー優先、無ければ保存済み URL。
+  const displayUrl = previewUrl ?? currentUrl;
+
+  // 選択ファイルからローカルプレビューを作る。前の blob を revoke してから新規生成する。
+  // onChange（イベント）からのみ呼ぶ。
+  const showLocalPreview = (file: File | null) => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    // 許可形式のときだけプレビュー（非対応は <img> が壊れるだけなので出さない。検証は RHF が表示）。
+    const next =
+      file &&
+      (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(file.type)
+        ? URL.createObjectURL(file)
+        : null;
+    objectUrlRef.current = next;
+    setPreviewUrl(next);
+  };
 
   const onSubmit = handleSubmit(async (values) => {
     const file = values.file[0];
@@ -106,11 +144,14 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         return;
       }
 
-      // 4) 表示用 URL を取り直す
+      // 4) 表示用 URL を取り直し、フォームを初期化してプレビュー表示を解除する
+      //    （blob 自体は次の選択／アンマウント時に revoke される）。
       const avatarRes = await apiGet("/me/avatar");
       if (avatarRes.ok) {
         const { url } = (await avatarRes.json()) as AvatarUrlResponse;
         setCurrentUrl(url);
+        reset();
+        setPreviewUrl(null);
       }
     } catch {
       setError("root", { message: "通信に失敗しました" });
@@ -120,11 +161,11 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col items-center gap-3">
       <div className="size-24 overflow-hidden rounded-full border border-black/[.12] bg-zinc-100 dark:border-white/[.2] dark:bg-zinc-900">
-        {currentUrl ? (
-          // presigned GET の一時 URL のため next/image の最適化対象にしない。
+        {displayUrl ? (
+          // presigned GET / blob プレビューの一時 URL のため next/image の最適化対象にしない。
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={currentUrl}
+            src={displayUrl}
             alt="プロフィール画像"
             className="size-full object-cover"
           />
@@ -140,7 +181,12 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         <input
           type="file"
           accept={AVATAR_ALLOWED_MIME_TYPES.join(",")}
-          {...register("file")}
+          {...fileField}
+          onChange={(e) => {
+            // RHF の onChange は残しつつ（検証のため）、ローカルプレビューを更新する。
+            void fileField.onChange(e);
+            showLocalPreview(e.target.files?.[0] ?? null);
+          }}
           className="text-xs file:mr-3 file:rounded-full file:border-0 file:bg-foreground file:px-3 file:py-1 file:text-background"
         />
         {errors.file && (
