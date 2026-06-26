@@ -13,18 +13,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-let client: S3Client | null = null;
-
-/**
- * S3Client は遅延生成のシングルトン。import しただけで env を要求しないので、
- * storage helper を呼ばないプロセス（ビルド等）が env 未設定でも落ちない。
- */
-export function getClient(): S3Client {
-  if (client) {
-    return client;
-  }
-  client = new S3Client({
-    endpoint: requireEnv("S3_ENDPOINT"),
+function buildClient(endpoint: string): S3Client {
+  return new S3Client({
+    endpoint,
     region: requireEnv("S3_REGION"),
     credentials: {
       accessKeyId: requireEnv("S3_ACCESS_KEY"),
@@ -39,7 +30,39 @@ export function getClient(): S3Client {
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
-  return client;
+}
+
+let presignClient: S3Client | null = null;
+let internalClient: S3Client | null = null;
+
+/**
+ * **presigned URL 発行用**のクライアント（遅延生成シングルトン）。
+ * presigned URL の署名にはエンドポイントの host が焼き込まれ、その URL を**ブラウザ**が
+ * 直接叩くため、host はブラウザのアクセス先（`S3_ENDPOINT`＝例 `localhost:3900`）でなければ
+ * ならない。import しただけでは env を要求しないので、helper を呼ばないプロセス（ビルド等）
+ * が env 未設定でも落ちない。
+ */
+export function getClient(): S3Client {
+  if (!presignClient) {
+    presignClient = buildClient(requireEnv("S3_ENDPOINT"));
+  }
+  return presignClient;
+}
+
+/**
+ * **サーバ → ストレージの直接操作用**クライアント（GetObject / DeleteObject 等）。
+ * presigned URL と違い API プロセス自身が接続するため、**API から到達できる**内部
+ * エンドポイント（`S3_INTERNAL_ENDPOINT`＝例 `http://garage:3900`）を使う。devcontainer では
+ * API コンテナから `localhost:3900` には届かない（あれはブラウザ用 host）ため両者を分ける。
+ * 未設定なら `S3_ENDPOINT` にフォールバック（単一ホストで両者が同じ本番など）。
+ */
+export function getInternalClient(): S3Client {
+  if (!internalClient) {
+    const endpoint =
+      process.env.S3_INTERNAL_ENDPOINT ?? requireEnv("S3_ENDPOINT");
+    internalClient = buildClient(endpoint);
+  }
+  return internalClient;
 }
 
 /** 操作対象のバケット名。 */

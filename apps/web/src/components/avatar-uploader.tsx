@@ -14,7 +14,8 @@ import { apiGet, apiPatch, apiPost } from "../lib/client-api";
 const MAX_MB = AVATAR_MAX_BYTES / 1024 / 1024;
 
 // ブラウザ側の事前検証。制約値（許可 MIME・最大サイズ）は validators を単一ソースに流用する。
-// 実アップロードの MIME 強制は presigned PUT の署名（ContentType）が担うので、ここは UX 用。
+// 実アップロードのサイズ強制は presigned POST の content-length-range、MIME 強制は
+// 署名の Content-Type 固定＋保存前の magic number 検証が担うので、ここは UX 用。
 const avatarFormSchema = z.object({
   file: z
     .custom<FileList>()
@@ -33,15 +34,20 @@ const avatarFormSchema = z.object({
 });
 type AvatarFormValues = z.infer<typeof avatarFormSchema>;
 
-type PresignResponse = { uploadUrl: string; key: string };
+type PresignResponse = {
+  url: string;
+  fields: Record<string, string>;
+  key: string;
+};
 type AvatarUrlResponse = { url: string | null };
 
 /**
- * プロフィール画像のアップロード（方式 A: presigned PUT）。
+ * プロフィール画像のアップロード（方式 A: presigned POST）。
  *
- * 1. POST /me/avatar/presign で署名済み PUT URL とキーを得る
- * 2. ブラウザから Garage へ直接 PUT（バイトは API を経由しない）
- * 3. PATCH /me でキーを保存
+ * 1. POST /me/avatar/presign で署名済み POST 先・フォームフィールド・キーを得る
+ * 2. ブラウザから Garage へ直接 multipart POST（バイトは API を経由しない）。
+ *    サイズ上限は POST ポリシーの content-length-range が実強制する。
+ * 3. PATCH /me でキーを保存（サーバが magic number で内容を検証）
  * 4. GET /me/avatar で表示用 presigned GET URL を取り直して反映
  */
 export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
@@ -59,7 +65,7 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
   const onSubmit = handleSubmit(async (values) => {
     const file = values.file[0];
     try {
-      // 1) presigned PUT URL を取得
+      // 1) presigned POST（URL・フォームフィールド・キー）を取得
       const presignRes = await apiPost("/me/avatar/presign", {
         contentType: file.type,
         size: file.size,
@@ -72,15 +78,19 @@ export function AvatarUploader({ initialUrl }: { initialUrl: string | null }) {
         setError("root", { message: "アップロードURLの取得に失敗しました" });
         return;
       }
-      const { uploadUrl, key } = (await presignRes.json()) as PresignResponse;
+      const { url, fields, key } = (await presignRes.json()) as PresignResponse;
 
-      // 2) Garage へ直接 PUT。Content-Type は署名と一致させる必要がある。
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!putRes.ok) {
+      // 2) Garage へ直接 multipart POST。署名フィールドを先に積み、file は最後に append する
+      //    （S3 互換は file 以降のフィールドを無視するため順序が重要）。Content-Type は
+      //    fields に含まれているので個別ヘッダは付けない（ブラウザが boundary を設定する）。
+      const formData = new FormData();
+      for (const [name, value] of Object.entries(fields)) {
+        formData.append(name, value);
+      }
+      formData.append("file", file);
+      const postRes = await fetch(url, { method: "POST", body: formData });
+      if (!postRes.ok) {
+        // サイズ超過は content-length-range 違反で Garage が 4xx を返す。
         setError("root", { message: "画像のアップロードに失敗しました" });
         return;
       }
