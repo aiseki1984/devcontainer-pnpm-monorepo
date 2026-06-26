@@ -112,11 +112,60 @@ export function avatarExtForMime(mime: AvatarMimeType): string {
 }
 
 /**
- * presigned PUT URL の発行リクエスト。クライアントがアップロード前にファイルの
- * MIME とサイズを申告し、API はこれを検証してから署名する。
+ * オブジェクト先頭バイト（magic number）から実体の画像 MIME を判定する。
+ * presigned POST/PUT は宣言 `Content-Type` しか縛れず中身は見ないため、保存前に
+ * これで「宣言型と実体の一致」を検証する（`image/png` を名乗る HTML/SVG 等を弾く）。
+ * WebP は RIFF コンテナ判定に 12 バイト要るので、呼び出し側は 12 バイト以上渡すこと。
+ * 判定不能（許可外）なら null。
+ */
+export function sniffAvatarImageMime(head: Uint8Array): AvatarMimeType | null {
+  // JPEG: FF D8 FF
+  if (
+    head.length >= 3 &&
+    head[0] === 0xff &&
+    head[1] === 0xd8 &&
+    head[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    head.length >= 8 &&
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47 &&
+    head[4] === 0x0d &&
+    head[5] === 0x0a &&
+    head[6] === 0x1a &&
+    head[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  // WebP: "RIFF" (0-3) .... "WEBP" (8-11)
+  if (
+    head.length >= 12 &&
+    head[0] === 0x52 &&
+    head[1] === 0x49 &&
+    head[2] === 0x46 &&
+    head[3] === 0x46 &&
+    head[8] === 0x57 &&
+    head[9] === 0x45 &&
+    head[10] === 0x42 &&
+    head[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+/**
+ * presigned POST 発行リクエスト。クライアントがアップロード前にファイルの MIME と
+ * サイズを申告し、API はこれを検証してから署名する。
  *
- * presigned PUT ではサイズをサーバ側で厳密強制できないため size は申告値の検証に留める。
- * MIME は署名の ContentType に焼き込むことで実アップロード時に強制される。
+ * サイズの **実強制** は presigned POST の `content-length-range` 条件が担う（ここでの
+ * size は早期に弾くための UX 用検証）。MIME は署名ポリシーの `Content-Type` 固定に加え、
+ * 保存前の magic number 検証（{@link sniffAvatarImageMime}）で実体まで確認する。
  */
 export const avatarPresignSchema = z.object({
   contentType: z.enum(AVATAR_ALLOWED_MIME_TYPES, {

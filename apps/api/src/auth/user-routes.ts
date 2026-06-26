@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import {
+  AVATAR_MAX_BYTES,
   avatarExtForMime,
   avatarPresignSchema,
   registerSchema,
+  sniffAvatarImageMime,
   updateMeSchema,
 } from "@pnpm-test-workspace/validators";
 import {
@@ -17,8 +19,10 @@ import {
 } from "@pnpm-test-workspace/db";
 import {
   buildAvatarKey,
+  deleteAvatarObject,
   presignAvatarDownload,
   presignAvatarUpload,
+  readAvatarHead,
 } from "@pnpm-test-workspace/storage";
 import { hashPassword } from "@pnpm-test-workspace/auth";
 import {
@@ -82,9 +86,10 @@ userAuthRoutes.post("/auth/register", async (c) => {
 });
 
 /**
- * アバターアップロード用の presigned PUT URL を発行する。
- * クライアントは MIME / サイズを申告し、検証を通れば直接 Garage へ PUT できる URL と
- * 保存予定のオブジェクトキーを受け取る。実バイトは API を経由しない（方式 A）。
+ * アバターアップロード用の presigned POST を発行する。
+ * クライアントは MIME / サイズを申告し、検証を通れば直接 Garage へ multipart POST できる
+ * URL とフォームフィールド、保存予定のオブジェクトキーを受け取る。実バイトは API を
+ * 経由しない（方式 A）。サイズ上限は POST ポリシーの content-length-range が実強制する。
  */
 userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
   const userId = Number(c.get("user").sub);
@@ -103,11 +108,12 @@ userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
   }
   const ext = avatarExtForMime(parsed.data.contentType);
   const key = buildAvatarKey(userId, ext);
-  const uploadUrl = await presignAvatarUpload({
+  const { url, fields } = await presignAvatarUpload({
     key,
     contentType: parsed.data.contentType,
+    maxBytes: AVATAR_MAX_BYTES,
   });
-  return c.json({ ok: true, uploadUrl, key });
+  return c.json({ ok: true, url, fields, key });
 });
 
 /**
@@ -136,9 +142,35 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
   const avatarKeyPattern = new RegExp(
     `^${userId}/[0-9a-f-]+\\.(jpg|png|webp)$`,
   );
-  if (!avatarKeyPattern.test(parsed.data.avatarKey)) {
+  const keyMatch = avatarKeyPattern.exec(parsed.data.avatarKey);
+  if (!keyMatch) {
     return c.json({ ok: false, error: "invalid avatar key" }, 400);
   }
+  const key = parsed.data.avatarKey;
+  const keyExt = keyMatch[1];
+
+  // 内容（magic number）検証。presigned POST は宣言 Content-Type しか縛れず中身は見ない
+  // ため、保存前に実バイト先頭を読んで実体が JPEG/PNG/WebP か、かつキー拡張子と一致するか
+  // を確認する。不一致なら不正オブジェクトを掃除して 400（key 自体は自分の名前空間内なので削除可）。
+  let head: Uint8Array;
+  try {
+    head = await readAvatarHead(key);
+  } catch {
+    // オブジェクトが存在しない（PUT 未完了など）。
+    return c.json({ ok: false, error: "avatar object not found" }, 400);
+  }
+  const sniffed = sniffAvatarImageMime(head);
+  if (!sniffed || avatarExtForMime(sniffed) !== keyExt) {
+    // 掃除はベストエフォート。削除が失敗してもオブジェクトが孤児として残るだけなので、
+    // 本来返すべき検証エラー(400)を握りつぶして 500 に化けさせない。
+    try {
+      await deleteAvatarObject(key);
+    } catch {
+      // 孤児は許容（アバター1枚の boilerplate では掃除を省略する方針と整合）。
+    }
+    return c.json({ ok: false, error: "invalid avatar content" }, 400);
+  }
+
   const updated = await updateUserAvatar(userId, parsed.data.avatarKey);
   if (!updated) {
     return c.json({ ok: false, error: "user not found" }, 404);
