@@ -43,6 +43,31 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
+/**
+ * マイギャラリー画像（非公開）。1 ユーザーが複数枚を持つ（users への 1:N）。
+ * 本体バイトはオブジェクトストレージ（非公開バケット）に置き、ここには **ポインタ + メタ**
+ * だけを持つ（BLOB は持たない）。表示は presigned GET URL を都度発行する。
+ * user_id は所有者で、認可（このレコードが本人の物か）の根拠になる。
+ */
+export const galleryImages = pgTable(
+  "gallery_images",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    // 元ファイル名（任意・表示/ダウンロード用メタ）。
+    originalName: text("original_name"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [index("gallery_images_user_id_idx").on(t.userId)],
+);
+
 /** 管理者。一般ユーザー（users）とは別テーブルで管理する。形は users と同じ。 */
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),

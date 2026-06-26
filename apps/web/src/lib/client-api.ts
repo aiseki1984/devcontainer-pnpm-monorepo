@@ -36,3 +36,8 @@ export function apiPatch(path: string, body?: unknown): Promise<Response> {
 export function apiGet(path: string): Promise<Response> {
   return fetch(`${API_URL}${path}`, { credentials: "include" });
 }
+
+/** Cookie 同送の DELETE。 */
+export function apiDelete(path: string): Promise<Response> {
+  return apiSend("DELETE", path);
+}

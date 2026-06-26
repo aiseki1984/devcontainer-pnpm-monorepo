@@ -29,6 +29,13 @@
       "when": 1782394471678,
       "tag": "0003_modern_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782487780184,
+      "tag": "0004_hesitant_guardian",
+      "breakpoints": true
     }
   ]
 }

@@ -136,6 +136,33 @@ RUN s3api put-bucket-cors --bucket media-public --cors-configuration "$CORS"
 > garage CLI でも同じことができる（`docker exec "$GARAGE" /garage bucket website --allow media-public`）。
 > aws-cli 版は S3 標準 API なので CORS と手順が揃い、実 S3 にも通じる。
 
+### (3) 非公開バケット media-private（マイギャラリー用）
+
+ギャラリーは **非公開バケット `media-private`** に保存し、表示は presigned GET（匿名 read は付けない）。
+こちらは `--default-bucket` の自動作成対象ではないので、**バケット作成 + dev キーへの権限付与**を一度行う。
+バケット作成と権限付与は garage CLI が確実（distroless だがバイナリ `/garage` は exec できる）:
+
+```bash
+GARAGE=$(docker ps -qf name=garage)
+docker exec "$GARAGE" /garage bucket create media-private
+docker exec "$GARAGE" /garage bucket allow --read --write \
+  media-private --key GK0123456789abcdef01234567
+```
+
+アップロードはブラウザの presigned POST 直送なので、media-private にも **CORS** が要る（read は
+presigned GET＝`<img>` には CORS 不要だが、POST のため）。`$CORS` は (2) で export 済みのものを使う:
+
+```bash
+# (A) devcontainer 内
+aws --endpoint-url http://garage:3900 --region garage \
+  s3api put-bucket-cors --bucket media-private --cors-configuration "$CORS"
+# (B) ホスト側 docker の場合は (2) の RUN 関数で:
+#   RUN s3api put-bucket-cors --bucket media-private --cors-configuration "$CORS"
+```
+
+> media-private には website を **付けない**（匿名公開しない）。確認は
+> `docker exec "$GARAGE" /garage bucket info media-private`（`Website access: false`／キーに RWO があること）。
+
 > 補足: presigned URL は **オフラインの署名計算**で、API コンテナから Garage への到達性は不要。
 > 署名に埋まる host（`S3_ENDPOINT` の `localhost:3900`）とブラウザのアクセス先が一致することが重要。
 > このため `S3_ENDPOINT` はコンテナ内向けの `garage:3900` ではなく **`localhost:3900`** にする。
