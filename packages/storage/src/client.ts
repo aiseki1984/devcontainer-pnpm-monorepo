@@ -65,7 +65,25 @@ export function getInternalClient(): S3Client {
   return internalClient;
 }
 
-/** 操作対象のバケット名。 */
-export function getBucket(): string {
-  return requireEnv("S3_BUCKET");
+/**
+ * 公開バケット名（匿名 read。avatar / logo など）。読み取りは Garage の website
+ * エンドポイント（{@link getPublicBaseUrl}）経由で署名なしの固定 URL で配信する。
+ */
+export function getPublicBucket(): string {
+  return requireEnv("S3_PUBLIC_BUCKET");
+}
+
+/** 非公開バケット名（presigned でしか読めない。gallery など本人/限定の私的ファイル）。 */
+export function getPrivateBucket(): string {
+  return requireEnv("S3_PRIVATE_BUCKET");
+}
+
+/**
+ * 公開バケットの **ブラウザ向け** ベース URL（Garage website エンドポイント）。
+ * 例: `http://media-public.web.localhost:3902`。公開オブジェクトの URL は
+ * `${base}/${key}` で組み立てる（{@link publicObjectUrl}）。S3 API(:3900) は匿名 read を
+ * サポートしないため、公開配信は website エンドポイント(:3902)を使う。
+ */
+export function getPublicBaseUrl(): string {
+  return requireEnv("S3_PUBLIC_BASE_URL");
 }

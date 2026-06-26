@@ -1,6 +1,7 @@
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import { loginSchema } from "@pnpm-test-workspace/validators";
+import { publicObjectUrl } from "@pnpm-test-workspace/storage";
 import {
   DUMMY_PASSWORD_HASH,
   generateRefreshToken,
@@ -78,9 +79,17 @@ export function createAuthRoutes<
     };
     // avatarKey は user アカウントだけが持つ。role で分岐し admin レスポンスには載せない
     // （プロパティの有無に依存すると、user 側クエリの射影変更で黙って欠落しうるため）。
-    return config.role === "user"
-      ? { ...base, avatarKey: account.avatarKey ?? null }
-      : base;
+    // avatar は公開バケット配信なので、key から公開固定 URL を導出して一緒に返す
+    // （コメント機能等で他ユーザーの avatar も同じ形で表示できる）。
+    if (config.role !== "user") {
+      return base;
+    }
+    const avatarKey = account.avatarKey ?? null;
+    return {
+      ...base,
+      avatarKey,
+      avatarUrl: avatarKey ? publicObjectUrl(avatarKey) : null,
+    };
   }
 
   function sessionResponse(account: TAccount) {

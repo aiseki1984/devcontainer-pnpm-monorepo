@@ -18,11 +18,11 @@ import {
   updateUserAvatar,
 } from "@pnpm-test-workspace/db";
 import {
-  buildAvatarKey,
-  deleteAvatarObject,
-  presignAvatarDownload,
-  presignAvatarUpload,
-  readAvatarHead,
+  buildObjectKey,
+  deleteObject,
+  getPublicBucket,
+  presignUpload,
+  readObjectHead,
 } from "@pnpm-test-workspace/storage";
 import { hashPassword } from "@pnpm-test-workspace/auth";
 import {
@@ -90,6 +90,7 @@ userAuthRoutes.post("/auth/register", async (c) => {
  * クライアントは MIME / サイズを申告し、検証を通れば直接 Garage へ multipart POST できる
  * URL とフォームフィールド、保存予定のオブジェクトキーを受け取る。実バイトは API を
  * 経由しない（方式 A）。サイズ上限は POST ポリシーの content-length-range が実強制する。
+ * avatar は公開アセットなので公開バケットに置く（読み取りは公開固定 URL）。
  */
 userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
   const userId = Number(c.get("user").sub);
@@ -107,8 +108,9 @@ userAuthRoutes.post("/me/avatar/presign", requireAuth, async (c) => {
     );
   }
   const ext = avatarExtForMime(parsed.data.contentType);
-  const key = buildAvatarKey(userId, ext);
-  const { url, fields } = await presignAvatarUpload({
+  const key = buildObjectKey("avatars", userId, ext);
+  const { url, fields } = await presignUpload({
+    bucket: getPublicBucket(),
     key,
     contentType: parsed.data.contentType,
     maxBytes: AVATAR_MAX_BYTES,
@@ -136,11 +138,11 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
       400,
     );
   }
-  // presign が発行する形（{userId}/{uuid}.{ext}）だけを受け付ける。プレフィックス
+  // presign が発行する形（avatars/{userId}/{uuid}.{ext}）だけを受け付ける。プレフィックス
   // 一致だけだと拡張子なしや任意サフィックスも通ってしまうため、キー全体を検証する。
   // userId は数値なので正規表現へ埋めても安全。
   const avatarKeyPattern = new RegExp(
-    `^${userId}/[0-9a-f-]+\\.(jpg|png|webp)$`,
+    `^avatars/${userId}/[0-9a-f-]+\\.(jpg|png|webp)$`,
   );
   const keyMatch = avatarKeyPattern.exec(parsed.data.avatarKey);
   if (!keyMatch) {
@@ -148,15 +150,23 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
   }
   const key = parsed.data.avatarKey;
   const keyExt = keyMatch[1];
+  const bucket = getPublicBucket();
+
+  // 更新前の avatar キーを控えておき、保存成功後に旧オブジェクトを掃除する（孤児防止）。
+  const current = await getUserById(userId);
+  if (!current) {
+    return c.json({ ok: false, error: "user not found" }, 404);
+  }
+  const previousKey = current.avatarKey;
 
   // 内容（magic number）検証。presigned POST は宣言 Content-Type しか縛れず中身は見ない
   // ため、保存前に実バイト先頭を読んで実体が JPEG/PNG/WebP か、かつキー拡張子と一致するか
   // を確認する。不一致なら不正オブジェクトを掃除して 400（key 自体は自分の名前空間内なので削除可）。
   let head: Uint8Array;
   try {
-    head = await readAvatarHead(key);
+    head = await readObjectHead({ bucket, key });
   } catch {
-    // オブジェクトが存在しない（PUT 未完了など）。
+    // オブジェクトが存在しない（アップロード未完了など）。
     return c.json({ ok: false, error: "avatar object not found" }, 400);
   }
   const sniffed = sniffAvatarImageMime(head);
@@ -164,9 +174,9 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
     // 掃除はベストエフォート。削除が失敗してもオブジェクトが孤児として残るだけなので、
     // 本来返すべき検証エラー(400)を握りつぶして 500 に化けさせない。
     try {
-      await deleteAvatarObject(key);
+      await deleteObject({ bucket, key });
     } catch {
-      // 孤児は許容（アバター1枚の boilerplate では掃除を省略する方針と整合）。
+      // 孤児は許容。
     }
     return c.json({ ok: false, error: "invalid avatar content" }, 400);
   }
@@ -175,26 +185,19 @@ userAuthRoutes.patch("/me", requireAuth, async (c) => {
   if (!updated) {
     return c.json({ ok: false, error: "user not found" }, 404);
   }
-  // 公開形の整形は route-factory の publicAccount に集約（/me・login と同じ形）。
-  return c.json({ ok: true, user: userAuth.publicAccount(updated) });
-});
 
-/**
- * 現在のアバターの表示用 presigned GET URL を返す（バケットは非公開）。
- * URL には有効期限があるため、表示のたびに取得し直せるよう /me とは別の専用経路にする。
- * 未設定なら url: null。
- */
-userAuthRoutes.get("/me/avatar", requireAuth, async (c) => {
-  const userId = Number(c.get("user").sub);
-  const user = await getUserById(userId);
-  if (!user) {
-    return c.json({ ok: false, error: "user not found" }, 401);
+  // 旧 avatar オブジェクトを掃除（ベストエフォート）。新キーは毎回ランダムなので別物。
+  if (previousKey && previousKey !== key) {
+    try {
+      await deleteObject({ bucket, key: previousKey });
+    } catch {
+      // 孤児は許容（保存自体は成功しているので失敗させない）。
+    }
   }
-  if (!user.avatarKey) {
-    return c.json({ ok: true, url: null });
-  }
-  const url = await presignAvatarDownload({ key: user.avatarKey });
-  return c.json({ ok: true, url });
+  // 公開形の整形は route-factory の publicAccount に集約（/me・login と同じ形）。
+  // avatar は公開バケット配信なので publicAccount が avatarUrl（公開固定 URL）も返す。
+  // 専用の GET /me/avatar（旧: presigned GET）は不要になったので廃止。
+  return c.json({ ok: true, user: userAuth.publicAccount(updated) });
 });
 
 userAuthRoutes.route("/", userAuth.routes);

@@ -9,25 +9,18 @@ type Me = {
     name: string;
     role: string;
     avatarKey: string | null;
+    // avatar は公開バケット配信。API が公開固定 URL を導出して返す（未設定なら null）。
+    avatarUrl: string | null;
   };
 };
-type AvatarUrl = { url: string | null };
 
 export default async function MyPage() {
   // 認証は proxy（期限切れ→refresh）と userApiGet（401→/login）が担う。
-  // /me と /me/avatar は互いに独立なので直列待ちせず並行で取得する。
-  const [res, avatarRes] = await Promise.all([
-    userApiGet("/me"),
-    userApiGet("/me/avatar"),
-  ]);
+  const res = await userApiGet("/me");
   if (!res.ok) redirect("/login");
 
   const { user } = (await res.json()) as Me;
-
-  // 表示用のアバター URL（presigned GET）。未設定・失敗時は null。
-  const { url: avatarUrl } = avatarRes.ok
-    ? ((await avatarRes.json()) as AvatarUrl)
-    : { url: null };
+  const avatarUrl = user.avatarUrl;
 
   return (
     <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">

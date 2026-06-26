@@ -71,37 +71,46 @@ pnpm --filter @pnpm-test-workspace/web dev   # 特定のパッケージだけ起
 
 ## オブジェクトストレージ（Garage）の初期化
 
-プロフィール画像は S3 互換ストレージ **Garage** に保管する。`.devcontainer/compose.yml`
+画像は S3 互換ストレージ **Garage** に保管する。`.devcontainer/compose.yml`
 の `garage` サービスとして起動するので、サービス追加後は **devcontainer を一度リビルド**
 してコンテナを作る。
 
-layout・バケット・アクセスキーは `garage server --single-node --default-bucket` と
-compose の `GARAGE_DEFAULT_*` 環境変数で **起動時に自動作成**される。固定の dev キーは
-`.env.example` の `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` と一致済みなので、
-`cp .env.example .env` していれば **アプリ側の追加設定は不要**。残る手動作業は **CORS** だけ。
+バケットは **公開/非公開の2系統**:
 
-> 既に古い方式（手動 layout/bucket/key）で初期化済みのボリュームが残っている場合は、
-> 一度クリーンにする: `docker volume rm <project>_garage_meta <project>_garage_data`
+- **`media-public`**（匿名 read。avatar / logo）— 読み取りは Garage の **website エンドポイント**
+  (`:3902`) 経由で署名なしの固定 URL（`http://media-public.web.localhost:3902/<key>`）。
+- **`media-private`**（presigned でしか読めない。gallery 等）— ギャラリー機能で追加予定。
+
+layout・公開バケット・アクセスキーは `garage server --single-node --default-bucket` と
+compose の `GARAGE_DEFAULT_*` で **起動時に自動作成**される（`GARAGE_DEFAULT_BUCKET=media-public`）。
+固定の dev キーは `.env.example` の `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_PUBLIC_BUCKET` と一致済み。
+残る手動作業は **(1) 公開バケットの匿名公開（website）** と **(2) CORS** の2つ。
+
+> 既に古い方式（手動 layout/bucket/key、または旧 `avatars` バケット）で初期化済みのボリュームが
+> 残っている場合は一度クリーンにする: `docker volume rm <project>_garage_meta <project>_garage_data`
 > （`<project>` は `docker volume ls` で確認。削除後にコンテナを再作成すると自動初期化が走る）。
 
-ブラウザが presigned POST/GET で Garage を直接叩くため、web の origin からの `POST`/`GET` を
-許可し、アップロード完了確認用に `ETag` を公開する **CORS** を一度だけ設定する。設定は S3 API
-（`PutBucketCors`）経由。実行場所に応じて 2 通りある。**認証情報はどちらも compose の
-`GARAGE_DEFAULT_*` と同じ固定 dev キー**で、CORS ルールも共通:
+2つとも S3 API（`PutBucketWebsite` / `PutBucketCors`）で設定でき、**aws-cli に統一**できる。
+**認証情報はどちらも compose の `GARAGE_DEFAULT_*` と同じ固定 dev キー**で、まず共通の env を export:
 
 ```bash
 export AWS_ACCESS_KEY_ID=GK0123456789abcdef01234567
 export AWS_SECRET_ACCESS_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# (1) website: media-public を匿名 read 可能にする（S3 API では匿名 GET 不可なので website 経由で配信）。
+export WEBSITE='{"IndexDocument":{"Suffix":"index.html"}}'
+# (2) CORS: ブラウザの presigned POST 直アップロード用（公開 read は website 経由＝CORS 不要）。
 export CORS='{"CORSRules":[{"AllowedOrigins":["http://localhost:3000"],"AllowedMethods":["GET","POST"],"AllowedHeaders":["*"],"ExposeHeaders":["ETag"]}]}'
 ```
 
-**(A) devcontainer の中から aws-cli で**（推奨）。aws-cli は Features で導入済み。devcontainer は
+**(A) devcontainer の中から aws-cli で**（推奨）。aws-cli は Features 導入済み。devcontainer は
 garage と同じ Docker ネットワークにいるのでサービス名 `garage:3900` へ直接届く
 （コンテナ内から `localhost:3900` では届かない点に注意）。
 
 ```bash
 aws --endpoint-url http://garage:3900 --region garage \
-  s3api put-bucket-cors --bucket avatars --cors-configuration "$CORS"
+  s3api put-bucket-website --bucket media-public --website-configuration "$WEBSITE"
+aws --endpoint-url http://garage:3900 --region garage \
+  s3api put-bucket-cors --bucket media-public --cors-configuration "$CORS"
 ```
 
 **(B) ホスト側から docker で**（devcontainer に入らず、ホストに aws-cli が無くても可）。使い捨ての
@@ -111,20 +120,27 @@ aws --endpoint-url http://garage:3900 --region garage \
 GARAGE=$(docker ps -qf name=garage)
 GARAGE_NET=$(docker inspect -f \
   '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$GARAGE")
-
-docker run --rm --network "$GARAGE_NET" \
+RUN() { docker run --rm --network "$GARAGE_NET" \
   -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-  amazon/aws-cli --endpoint-url http://garage:3900 --region garage \
-  s3api put-bucket-cors --bucket avatars --cors-configuration "$CORS"
+  amazon/aws-cli --endpoint-url http://garage:3900 --region garage "$@"; }
+
+RUN s3api put-bucket-website --bucket media-public --website-configuration "$WEBSITE"
+RUN s3api put-bucket-cors --bucket media-public --cors-configuration "$CORS"
 ```
+
+確認: `aws ... s3api get-bucket-website --bucket media-public`、または
+`docker exec "$GARAGE" /garage bucket info media-public`（`Website access: true` を確認）。
+これで `http://media-public.web.localhost:3902/<key>` が匿名で読める（`*.localhost` は主要ブラウザが
+127.0.0.1 に解決するので hosts 編集は不要）。
+
+> garage CLI でも同じことができる（`docker exec "$GARAGE" /garage bucket website --allow media-public`）。
+> aws-cli 版は S3 標準 API なので CORS と手順が揃い、実 S3 にも通じる。
 
 > 補足: presigned URL は **オフラインの署名計算**で、API コンテナから Garage への到達性は不要。
 > 署名に埋まる host（`S3_ENDPOINT` の `localhost:3900`）とブラウザのアクセス先が一致することが重要。
 > このため `S3_ENDPOINT` はコンテナ内向けの `garage:3900` ではなく **`localhost:3900`** にする。
-> （CORS 設定の aws-cli が `garage:3900` を使うのは別問題で、そちらは署名さえ整合すれば host は何でもよい。
-> aws-cli は「指定 endpoint で署名 → そこへ接続」なので、署名 host と接続 host は常に一致する。）
-> 公式イメージは distroless なので、Garage の CLI を直接使う場合は**ホスト側**で
-> `docker exec "$GARAGE" /garage <cmd>` のように叩く。
+> （aws-cli が `garage:3900` を使うのは別問題で、そちらは「指定 endpoint で署名 → そこへ接続」のため
+> 署名 host と接続 host が常に一致する。）
 
 ## 環境変数について
 
